@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 const navItems = [
@@ -14,6 +15,7 @@ function Navbar() {
   const location = useLocation()
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
 
   const handleLogout = () => {
     localStorage.removeItem('user')
@@ -24,20 +26,85 @@ function Navbar() {
 
   return (
     <>
-      {/* ── DESKTOP SIDEBAR ── */}
+      {/* ══════════════════════════════
+          LOGOUT CONFIRM MODAL
+      ══════════════════════════════ */}
+      {showLogoutModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(6px)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 9999, padding: 16,
+        }}>
+          <div style={{
+            background: 'white', borderRadius: 20, padding: '32px 28px',
+            width: '100%', maxWidth: 360,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+            border: '1px solid #d1fae5',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 52 }}>🚪</div>
+            <div>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                Logout Confirmation
+              </h2>
+              <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6 }}>
+                Are you sure you want to logout?<br />
+                <strong style={{ color: '#0f172a' }}>{user.username}</strong> will be signed out.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 4 }}>
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                style={{
+                  flex: 1, padding: '12px',
+                  background: '#f0fdf4', color: '#475569',
+                  border: '1.5px solid #d1fae5', borderRadius: 12,
+                  cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
+                onMouseLeave={e => e.currentTarget.style.background = '#f0fdf4'}
+              >
+                ✕ Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                style={{
+                  flex: 1, padding: '12px',
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  color: 'white', border: 'none', borderRadius: 12,
+                  cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                  boxShadow: '0 4px 12px rgba(239,68,68,0.35)',
+                  transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                🚪 Yes, Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════
+          DESKTOP SIDEBAR
+      ══════════════════════════════ */}
       <aside style={{
         width: 200, minHeight: '100vh',
         background: 'linear-gradient(180deg, #14532d 0%, #166534 100%)',
         display: 'flex', flexDirection: 'column',
         boxShadow: '4px 0 20px rgba(22,163,74,0.15)',
         flexShrink: 0, position: 'sticky', top: 0,
-        height: '100vh', overflowY: 'auto'
+        height: '100vh', overflowY: 'auto',
       }}>
         {/* Logo */}
         <div style={{
           padding: '18px 16px 16px',
           borderBottom: '1px solid rgba(255,255,255,0.1)',
-          display: 'flex', alignItems: 'center', gap: 9
+          display: 'flex', alignItems: 'center', gap: 9,
         }}>
           <span style={{ fontSize: 26, lineHeight: 1 }}>🏨</span>
           <div>
@@ -81,18 +148,26 @@ function Navbar() {
               <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>{user.role}</div>
             </div>
           </div>
-          <button onClick={handleLogout} style={{
-            width: '100%', padding: '8px',
-            background: 'rgba(239,68,68,0.15)', color: '#fca5a5',
-            border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
-            cursor: 'pointer', fontSize: 12, fontWeight: 600
-          }}>
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            style={{
+              width: '100%', padding: '8px',
+              background: 'rgba(239,68,68,0.15)', color: '#fca5a5',
+              border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
+              cursor: 'pointer', fontSize: 12, fontWeight: 600,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.25)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+          >
             🚪 Logout
           </button>
         </div>
       </aside>
 
-      {/* ── MOBILE BOTTOM NAV ── */}
+      {/* ══════════════════════════════
+          MOBILE BOTTOM NAV
+      ══════════════════════════════ */}
       <nav className="mobile-nav">
         {visibleItems.slice(0, 5).map(item => {
           const isActive = location.pathname === item.path
@@ -103,11 +178,14 @@ function Navbar() {
             </Link>
           )
         })}
-        <button onClick={handleLogout} style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-          background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)',
-          fontSize: 9, fontWeight: 600, cursor: 'pointer', flex: 1, padding: '5px 4px'
-        }}>
+        <button
+          onClick={() => setShowLogoutModal(true)}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)',
+            fontSize: 9, fontWeight: 600, cursor: 'pointer', flex: 1, padding: '5px 4px',
+          }}
+        >
           <span style={{ fontSize: 18 }}>🚪</span>
           Logout
         </button>
