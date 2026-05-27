@@ -1,4 +1,4 @@
-const API = 'http://192.168.0.131:5000/api'
+const API = 'https://bistro-pos-production.up.railway.app/api'
 
 const getToken = () => {
   try { return JSON.parse(localStorage.getItem('user') || '{}').token || '' } catch { return '' }
