@@ -104,11 +104,11 @@ function Navbar() {
           )
         })}
         <button onClick={handleLogout} style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
           background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)',
-          fontSize: 10, fontWeight: 600, cursor: 'pointer', flex: 1, padding: '6px 4px'
+          fontSize: 9, fontWeight: 600, cursor: 'pointer', flex: 1, padding: '5px 4px'
         }}>
-          <span style={{ fontSize: 20 }}>🚪</span>
+          <span style={{ fontSize: 18 }}>🚪</span>
           Logout
         </button>
       </nav>
