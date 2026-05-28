@@ -202,7 +202,7 @@ function Transaction() {
       await loadTables(); await loadTransactions(); await loadAlerts()
       if (isMobile) setShowCart(false)
       if (E_WALLETS.includes(paymentMethod)) setShowQRModal(true)
-      else setTimeout(() => printReceipt(receiptData), 300)
+      else setTimeout(() => printReceipt(receiptData, true), 300)
     } catch (e) { setError('Failed to save transaction! ' + e.message) }
     setLoadingCheckout(false)
   }
@@ -251,7 +251,7 @@ function Transaction() {
       payment_method: tx.payment_method || 'Cash', cashier_name: tx.cashier_name,
       date: new Date(tx.created_at).toLocaleString(), voided: false
     }
-    printReceipt(r); setShowReprintModal(false); setReprintTxId('')
+    printReceipt(r, true); setShowReprintModal(false); setReprintTxId('')
   }
 
   const openSettingsModal = () => { setTmpSettings(JSON.parse(JSON.stringify(settings))); setShowSettingsModal(true) }
@@ -266,29 +266,139 @@ function Transaction() {
   const updateDiscount = (idx, field, val) => setTmpSettings(prev => { const d = [...prev.discounts]; d[idx] = { ...d[idx], [field]: val }; return { ...prev, discounts: d } })
   const removeDiscount = (idx) => setTmpSettings(prev => ({ ...prev, discounts: prev.discounts.filter((_, i) => i !== idx) }))
 
-  const printReceipt = (r) => {
-    const win = window.open('', '_blank', 'width=400,height=700')
-    win.document.write(`<!DOCTYPE html><html><head><title>Receipt</title>
-      <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;padding:20px;width:300px;margin:0 auto}.c{text-align:center}.b{font-weight:bold}.d{border-top:1px dashed #000;margin:8px 0}.r{display:flex;justify-content:space-between;margin:3px 0}.t{display:flex;justify-content:space-between;font-weight:bold;font-size:15px;margin:4px 0}.disc{font-size:11px;color:#555;padding-left:10px}</style>
-      </head><body>
-      <div class="c b" style="font-size:15px">🏨 VS HOTEL BISTRO</div>
-      <div class="c" style="font-size:11px;margin-top:2px">Official Receipt</div>
-      <div class="d"></div>
-      <div>Date: ${r.date}</div><div>Table No: <b>${r.tableNo}</b></div>
-      <div>Cashier: <b>${r.cashier_name}</b></div><div>Payment: <b>${r.payment_method}</b></div>
-      ${r.id ? `<div>Receipt #: <b>${r.id}</b></div>` : ''}
-      <div class="d"></div>
-      ${r.items.map(i => `<div class="r"><span>${i.name} x${i.qty}</span><span>&#8369;${(i.price * i.qty).toLocaleString()}</span></div>${i.item_discount !== 'None' ? `<div class="disc">Discount (${i.item_discount}): -&#8369;${Number(i.item_discount_amount).toFixed(2)}</div>` : ''}`).join('')}
-      <div class="d"></div>
-      <div class="r"><span>Subtotal</span><span>&#8369;${Number(r.subtotal).toLocaleString()}</span></div>
-      ${r.vat_enabled ? `<div class="r"><span>VAT (${r.vat_rate}%)</span><span>&#8369;${Number(r.vat_amount).toFixed(2)}</span></div>` : ''}
-      <div class="t"><span>TOTAL</span><span>&#8369;${Number(r.total).toLocaleString()}</span></div>
-      ${r.payment_method === 'Cash' ? `<div class="r"><span>Amount Paid</span><span>&#8369;${Number(r.paid).toLocaleString()}</span></div><div class="r b"><span>Change</span><span>&#8369;${Number(r.change).toLocaleString()}</span></div>` : `<div class="r"><span>Paid via</span><span>${r.payment_method}</span></div>`}
-      <div class="d"></div>
-      <div class="c b" style="margin-top:8px">Thank you for dining with us! 🍽️</div>
-      </body></html>`)
-    win.document.close(); win.focus(); win.print(); win.close()
+  // ── UPDATED PRINT RECEIPT FUNCTION ──────────────────────────────────────────
+  const printReceipt = (r, preview = false) => {
+    const receiptHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Receipt #${r.id}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      width: 302px;
+      margin: 0 auto;
+      padding: 10px 10px ${preview ? '80px' : '10px'};
+      background: white;
+      color: #000;
+    }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .divider { border-top: 1px dashed #000; margin: 6px 0; }
+    .double-divider { border-top: 2px solid #000; margin: 6px 0; }
+    .row { display: flex; justify-content: space-between; margin: 3px 0; }
+    .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin: 4px 0; }
+    .item-name { flex: 1; word-wrap: break-word; }
+    .item-price { text-align: right; min-width: 70px; }
+    .discount { font-size: 11px; color: #333; padding-left: 12px; margin-bottom: 2px; }
+    .big { font-size: 16px; font-weight: bold; }
+    .barcode { font-size: 30px; letter-spacing: 4px; margin: 8px 0; }
+    @media print {
+      body { width: 302px; padding-bottom: 10px; }
+      @page { margin: 0; size: 80mm auto; }
+      .preview-controls { display: none !important; }
+    }
+    .preview-controls {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #1e293b; padding: 12px 20px;
+      display: flex; gap: 10px; justify-content: center;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+    }
+    .btn-print {
+      padding: 10px 28px; background: #16a34a; color: white;
+      border: none; border-radius: 8px; font-size: 14px;
+      font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
+    }
+    .btn-close {
+      padding: 10px 28px; background: #475569; color: white;
+      border: none; border-radius: 8px; font-size: 14px;
+      font-weight: 700; cursor: pointer;
+    }
+    .btn-print:hover { background: #15803d; }
+    .btn-close:hover { background: #334155; }
+  </style>
+</head>
+<body>
+  <div class="center" style="margin-bottom:8px">
+    <div class="big">VS HOTEL BISTRO</div>
+    <div style="font-size:10px; margin-top:2px; letter-spacing:1px;">- - OFFICIAL RECEIPT - -</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="row"><span>Receipt #:</span><span><b>${r.id || 'N/A'}</b></span></div>
+  <div class="row"><span>Date:</span><span>${r.date}</span></div>
+  <div class="row"><span>Table:</span><span><b>Table ${r.tableNo}</b></span></div>
+  <div class="row"><span>Cashier:</span><span>${r.cashier_name}</span></div>
+  <div class="row"><span>Payment:</span><span><b>${r.payment_method}</b></span></div>
+
+  <div class="divider"></div>
+  <div style="font-size:11px; font-weight:bold; margin-bottom:4px;">ITEMS ORDERED:</div>
+
+  ${r.items.map(i => `
+    <div class="row">
+      <span class="item-name">${i.name} x${i.qty}</span>
+      <span class="item-price">&#8369;${(i.price * i.qty).toLocaleString('en-PH', {minimumFractionDigits:2})}</span>
+    </div>
+    ${i.item_discount && i.item_discount !== 'None'
+      ? `<div class="discount">  Disc (${i.item_discount}): -&#8369;${Number(i.item_discount_amount).toFixed(2)}</div>`
+      : ''}
+  `).join('')}
+
+  <div class="divider"></div>
+
+  ${r.vat_enabled ? `
+    <div class="row"><span>Subtotal</span><span>&#8369;${Number(r.subtotal).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
+    <div class="row"><span>VAT (${r.vat_rate}%)</span><span>&#8369;${Number(r.vat_amount).toFixed(2)}</span></div>
+  ` : ''}
+
+  <div class="double-divider"></div>
+  <div class="total-row">
+    <span>TOTAL DUE</span>
+    <span>&#8369;${Number(r.total).toLocaleString('en-PH', {minimumFractionDigits:2})}</span>
+  </div>
+  <div class="double-divider"></div>
+
+  ${r.payment_method === 'Cash' ? `
+    <div class="row"><span>Cash Tendered</span><span>&#8369;${Number(r.paid).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
+    <div class="row bold"><span>Change</span><span>&#8369;${Number(r.change).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
+  ` : `
+    <div class="row center" style="justify-content:center; margin:4px 0;">
+      <span>** Paid via <b>${r.payment_method}</b> **</span>
+    </div>
+  `}
+
+  <div class="divider"></div>
+
+  <div class="center" style="margin-top:8px">
+    <div class="barcode">|||||||||||||||</div>
+    <div style="font-size:10px; letter-spacing:2px; margin-bottom:6px;">${String(r.id || '').padStart(10, '0')}</div>
+    <div style="font-size:12px; font-weight:bold;">Thank you for dining with us!</div>
+    <div style="font-size:10px; margin-top:3px; color:#333;">Please come again :-)</div>
+    <div style="font-size:9px; color:#555; margin-top:6px; letter-spacing:1px;">VS HOTEL BISTRO</div>
+  </div>
+
+  ${preview ? `
+  <div class="preview-controls">
+    <button class="btn-print" onclick="window.print()">&#128438; Print Receipt</button>
+    <button class="btn-close" onclick="window.close()">&#x2715; Close</button>
+  </div>
+  ` : ''}
+</body>
+</html>`
+
+    const win = window.open('', '_blank', `width=380,height=${preview ? 700 : 600},scrollbars=yes`)
+    if (!win) { alert('Pop-up blocked! Please allow pop-ups for this site.'); return }
+    win.document.write(receiptHTML)
+    win.document.close()
+    win.focus()
+
+    if (!preview) {
+      setTimeout(() => { win.print(); win.close() }, 600)
+    }
   }
+  // ────────────────────────────────────────────────────────────────────────────
 
   const getStockBadge = (item) => {
     const s = item.stock ?? 0
@@ -573,7 +683,6 @@ function Transaction() {
 
         {/* MAIN LAYOUT */}
         {isMobile ? (
-          // MOBILE: show menu full width, cart is a bottom sheet
           <div>
             <div className="category-tabs" style={{ overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 4 }}>
               {categories.map(cat => (
@@ -645,7 +754,6 @@ function Transaction() {
             )}
           </div>
         ) : (
-          // DESKTOP: side-by-side layout
           <div className="transaction-layout">
             <div>
               <div className="category-tabs">
@@ -723,11 +831,11 @@ function Transaction() {
             </>}
             <hr />
             <p style={{ textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Thank you for dining with us! 🍽️</p>
-            <button className="btn-primary" onClick={() => printReceipt(receipt)} style={{ width: '100%' }}><FaPrint size={13} /> Print Again</button>
+            <button className="btn-primary" onClick={() => printReceipt(receipt, true)} style={{ width: '100%' }}><FaPrint size={13} /> Print Again</button>
           </div>
         )}
 
-        {/* ── MODALS (same as before) ── */}
+        {/* ── MODALS ── */}
 
         {showSettingsModal && tmpSettings && (
           <div className="modal-overlay">
@@ -790,7 +898,7 @@ function Transaction() {
               <p style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>Ask the customer to scan — <strong>₱{receipt?.total?.toLocaleString()}</strong></p>
               <img src={settings.qrImages[paymentMethod]} alt="QR Code" style={{ width: 200, height: 200, margin: '0 auto 16px', display: 'block', border: '3px solid #e2e8f0', borderRadius: 12, objectFit: 'contain', background: 'white' }} />
               <div className="form-actions" style={{ justifyContent: 'center' }}>
-                <button onClick={() => { setShowQRModal(false); printReceipt(receipt) }} style={{ padding: '11px 24px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>✅ Paid — Print</button>
+                <button onClick={() => { setShowQRModal(false); printReceipt(receipt, true) }} style={{ padding: '11px 24px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>✅ Paid — Print</button>
                 <button className="btn-secondary" onClick={() => setShowQRModal(false)}>Cancel</button>
               </div>
             </div>
