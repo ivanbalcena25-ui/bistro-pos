@@ -168,11 +168,12 @@ function Navbar() {
       )}
 
       {/* MOBILE BOTTOM NAV */}
-      <nav className="mobile-nav">
-        {visibleItems.slice(0, 5).map(item => {
+      <nav className="mobile-nav" style={{ overflowX: 'auto', justifyContent: 'flex-start' }}>
+        {visibleItems.map(item => {
           const isActive = location.pathname === item.path
           return (
-            <Link key={item.path} to={item.path} className={isActive ? 'active' : ''}>
+            <Link key={item.path} to={item.path} className={isActive ? 'active' : ''}
+              style={{ flexShrink: 0, minWidth: 56 }}>
               <span className="icon">{item.icon}</span>
               {item.label}
             </Link>
@@ -183,7 +184,8 @@ function Navbar() {
           style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
             background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)',
-            fontSize: 9, fontWeight: 600, cursor: 'pointer', flex: 1, padding: '5px 4px',
+            fontSize: 9, fontWeight: 600, cursor: 'pointer',
+            flexShrink: 0, minWidth: 56, padding: '5px 4px',
           }}
         >
           <span style={{ fontSize: 18 }}>🚪</span>
