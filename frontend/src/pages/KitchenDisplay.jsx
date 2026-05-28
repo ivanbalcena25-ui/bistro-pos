@@ -24,25 +24,51 @@ function getUrgencyColor(createdAt, status) {
   return null
 }
 
-function playBeep() {
+function playBeep(soundOn) {
+  if (!soundOn) return
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const playTone = (freq, start, duration) => {
+    const playDing = (freq, start, vol = 0.6) => {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      osc.connect(gain); gain.connect(ctx.destination)
+      osc2.connect(gain2); gain2.connect(ctx.destination)
       osc.frequency.value = freq
-      osc.type = 'sine'
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + start)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration)
+      osc2.frequency.value = freq * 2.5
+      osc.type = 'triangle'
+      osc2.type = 'sine'
+      gain.gain.setValueAtTime(vol, ctx.currentTime + start)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + 1.2)
+      gain2.gain.setValueAtTime(vol * 0.3, ctx.currentTime + start)
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + 0.8)
       osc.start(ctx.currentTime + start)
-      osc.stop(ctx.currentTime + start + duration)
+      osc.stop(ctx.currentTime + start + 1.2)
+      osc2.start(ctx.currentTime + start)
+      osc2.stop(ctx.currentTime + start + 0.8)
     }
-    playTone(880, 0, 0.15)
-    playTone(1100, 0.18, 0.15)
-    playTone(1320, 0.36, 0.25)
+    playDing(900, 0)
+    playDing(900, 0.45)
+    playDing(900, 0.9)
   } catch {}
+}
+
+function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission()
+  }
+}
+
+function showBrowserNotif(count) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('🔔 New Kitchen Order!', {
+      body: `${count} new order${count > 1 ? 's' : ''} waiting in the kitchen!`,
+      icon: '/favicon.ico',
+      tag: 'kitchen-order',
+      renotify: true,
+    })
+  }
 }
 
 function OrderCard({ order, onStatusChange, updating, isNew }) {
@@ -125,6 +151,11 @@ function KitchenDisplay() {
   const prevOrderIdsRef = useRef(new Set())
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [notification, setNotification] = useState(null)
+  const [soundOn, setSoundOn] = useState(true)
+  const [unacked, setUnacked] = useState(0)
+  const soundOnRef = useRef(true)
+
+  useEffect(() => { soundOnRef.current = soundOn }, [soundOn])
 
   const loadOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -137,16 +168,20 @@ function KitchenDisplay() {
       const newIds = new Set([...currentIds].filter(id => !prevOrderIdsRef.current.has(id)))
 
       if (newIds.size > 0 && prevOrderIdsRef.current.size > 0) {
-        playBeep()
+        playBeep(soundOnRef.current)
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200])
         setNewOrderIds(newIds)
-        const newCount = list.filter(o => newIds.has(o.id) && o.status === 'Pending').length
+        const newPending = list.filter(o => newIds.has(o.id) && o.status === 'Pending')
+        const newCount = newPending.length
         if (newCount > 0) {
+          setUnacked(prev => prev + newCount)
           setNotification(`🔔 ${newCount} new order${newCount > 1 ? 's' : ''}!`)
           document.title = `🔔 ${newCount} New Order${newCount > 1 ? 's' : ''}! — Kitchen`
+          showBrowserNotif(newCount)
           setTimeout(() => {
             setNotification(null)
             document.title = 'Kitchen Display — Bistro POS'
-          }, 4000)
+          }, 5000)
         }
         setTimeout(() => setNewOrderIds(new Set()), 3500)
       }
@@ -162,6 +197,7 @@ function KitchenDisplay() {
 
   useEffect(() => {
     document.title = 'Kitchen Display — Bistro POS'
+    requestNotifPermission()
     loadOrders()
     const interval = setInterval(() => loadOrders(true), 3000)
     return () => {
@@ -201,6 +237,10 @@ function KitchenDisplay() {
           0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
           50% { transform: scale(1.02); box-shadow: 0 8px 30px rgba(239,68,68,0.3); }
         }
+        @keyframes bannerPulse {
+          0%, 100% { transform: translateX(-50%) scale(1); }
+          50% { transform: translateX(-50%) scale(1.05); }
+        }
       `}</style>
       <Navbar />
       <div className="page-content">
@@ -209,12 +249,24 @@ function KitchenDisplay() {
         {notification && (
           <div style={{
             position: 'fixed', top: 20, left: '50%', transform: 'translateX(-50%)',
-            background: '#ef4444', color: 'white', padding: '14px 28px', borderRadius: 50,
-            fontWeight: 800, fontSize: 16, zIndex: 9999,
-            boxShadow: '0 8px 32px rgba(239,68,68,0.5)',
-            animation: 'newOrderPulse 0.5s ease-in-out infinite'
+            background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+            color: 'white', padding: '16px 32px', borderRadius: 50,
+            fontWeight: 800, fontSize: 18, zIndex: 9999,
+            boxShadow: '0 8px 40px rgba(239,68,68,0.6)',
+            animation: 'bannerPulse 0.5s ease-in-out infinite',
+            display: 'flex', alignItems: 'center', gap: 10, whiteSpace: 'nowrap',
           }}>
+            <span style={{ fontSize: 24 }}>🔔</span>
             {notification}
+            <button onClick={() => { setNotification(null); setUnacked(0) }} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: 'white', borderRadius: '50%', width: 26, height: 26, cursor: 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 6 }}>✕</button>
+          </div>
+        )}
+
+        {/* Unacked badge at top if no banner */}
+        {!notification && unacked > 0 && (
+          <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 12, padding: '10px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 14 }}>🔔 {unacked} new order{unacked > 1 ? 's' : ''} since last check</span>
+            <button onClick={() => setUnacked(0)} style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 8, padding: '5px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>✓ Got it</button>
           </div>
         )}
 
@@ -229,9 +281,14 @@ function KitchenDisplay() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>
-              🟢 Live · {lastRefresh.toLocaleTimeString()}
-            </span>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>🟢 Live · {lastRefresh.toLocaleTimeString()}</span>
+            {/* Sound Toggle */}
+            <button
+              onClick={() => setSoundOn(prev => !prev)}
+              title={soundOn ? 'Mute sound' : 'Unmute sound'}
+              style={{ padding: '10px 14px', background: soundOn ? '#f0fdf4' : '#fef2f2', color: soundOn ? '#16a34a' : '#ef4444', border: `1.5px solid ${soundOn ? '#bbf7d0' : '#fca5a5'}`, borderRadius: 10, cursor: 'pointer', fontSize: 16, fontWeight: 700 }}>
+              {soundOn ? '🔔' : '🔕'}
+            </button>
             <button onClick={() => loadOrders()} style={{ padding: '10px 18px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
               🔄 Refresh
             </button>
@@ -250,9 +307,7 @@ function KitchenDisplay() {
               {f}
             </button>
           ))}
-          <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8' }}>
-            Auto-refresh every 3s
-          </span>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8' }}>Auto-refresh every 3s</span>
         </div>
 
         {loading ? (
@@ -279,6 +334,7 @@ function KitchenDisplay() {
             ))}
           </div>
         )}
+
       </div>
     </div>
   )
