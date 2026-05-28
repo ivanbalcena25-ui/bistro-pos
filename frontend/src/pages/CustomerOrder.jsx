@@ -5,7 +5,7 @@ import { FaPlus, FaTrash, FaShoppingCart, FaSignOutAlt } from 'react-icons/fa'
 const categories = ['Coffee', 'Non-Coffee', 'Beer', 'Pulutan']
 const categoryIcons = { Coffee: '☕', 'Non-Coffee': '🧃', Beer: '🍺', Pulutan: '🍗' }
 
-const API = 'http://localhost:5000/api'
+const API = 'https://bistro-pos.onrender.com/api'
 
 function CustomerOrder() {
   const [availableItems, setAvailableItems] = useState([])
