@@ -16,6 +16,13 @@ function Navbar() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+
+  useState(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const handleLogout = () => {
     localStorage.removeItem('user')
@@ -26,9 +33,7 @@ function Navbar() {
 
   return (
     <>
-      {/* ══════════════════════════════
-          LOGOUT CONFIRM MODAL
-      ══════════════════════════════ */}
+      {/* LOGOUT CONFIRM MODAL */}
       {showLogoutModal && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -62,7 +67,6 @@ function Navbar() {
                   background: '#f0fdf4', color: '#475569',
                   border: '1.5px solid #d1fae5', borderRadius: 12,
                   cursor: 'pointer', fontSize: 14, fontWeight: 600,
-                  transition: 'all 0.15s',
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
                 onMouseLeave={e => e.currentTarget.style.background = '#f0fdf4'}
@@ -77,7 +81,6 @@ function Navbar() {
                   color: 'white', border: 'none', borderRadius: 12,
                   cursor: 'pointer', fontSize: 14, fontWeight: 600,
                   boxShadow: '0 4px 12px rgba(239,68,68,0.35)',
-                  transition: 'all 0.15s',
                 }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
@@ -89,85 +92,82 @@ function Navbar() {
         </div>
       )}
 
-      {/* ══════════════════════════════
-          DESKTOP SIDEBAR
-      ══════════════════════════════ */}
-      <aside style={{
-        width: 200, minHeight: '100vh',
-        background: 'linear-gradient(180deg, #14532d 0%, #166534 100%)',
-        display: 'flex', flexDirection: 'column',
-        boxShadow: '4px 0 20px rgba(22,163,74,0.15)',
-        flexShrink: 0, position: 'sticky', top: 0,
-        height: '100vh', overflowY: 'auto',
-      }}>
-        {/* Logo */}
-        <div style={{
-          padding: '18px 16px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
-          display: 'flex', alignItems: 'center', gap: 9,
+      {/* DESKTOP SIDEBAR */}
+      {!isMobile && (
+        <aside style={{
+          width: 200, minHeight: '100vh',
+          background: 'linear-gradient(180deg, #14532d 0%, #166534 100%)',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '4px 0 20px rgba(22,163,74,0.15)',
+          flexShrink: 0, position: 'sticky', top: 0,
+          height: '100vh', overflowY: 'auto',
         }}>
-          <span style={{ fontSize: 26, lineHeight: 1 }}>🏨</span>
-          <div>
-            <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 9, fontWeight: 800, letterSpacing: '2.5px' }}>VS HOTEL</div>
-            <div style={{ color: '#4ade80', fontSize: 14, fontWeight: 900, letterSpacing: '3px', lineHeight: 1.2 }}>BISTRO</div>
-          </div>
-        </div>
-
-        {/* Nav Links */}
-        <nav style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {visibleItems.map(item => {
-            const isActive = location.pathname === item.path
-            return (
-              <Link key={item.path} to={item.path} style={{
-                display: 'flex', alignItems: 'center', gap: 9,
-                padding: '10px 12px', borderRadius: 10, textDecoration: 'none',
-                background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
-                color: isActive ? 'white' : 'rgba(255,255,255,0.65)',
-                fontWeight: isActive ? 700 : 500, fontSize: 13.5,
-                transition: 'all 0.15s',
-                borderLeft: isActive ? '3px solid #4ade80' : '3px solid transparent',
-              }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
-              >
-                <span style={{ fontSize: 16 }}>{item.icon}</span>
-                {item.label}
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* User + Logout */}
-        <div style={{ padding: '12px 10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 4px' }}>
-            <span style={{ fontSize: 18 }}>
-              {user.role === 'Admin' ? '👑' : user.role === 'Cashier' ? '🧑‍💼' : '🍳'}
-            </span>
+          {/* Logo */}
+          <div style={{
+            padding: '18px 16px 16px',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex', alignItems: 'center', gap: 9,
+          }}>
+            <span style={{ fontSize: 26, lineHeight: 1 }}>🏨</span>
             <div>
-              <div style={{ color: 'white', fontSize: 13, fontWeight: 700 }}>{user.username}</div>
-              <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>{user.role}</div>
+              <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 9, fontWeight: 800, letterSpacing: '2.5px' }}>VS HOTEL</div>
+              <div style={{ color: '#4ade80', fontSize: 14, fontWeight: 900, letterSpacing: '3px', lineHeight: 1.2 }}>BISTRO</div>
             </div>
           </div>
-          <button
-            onClick={() => setShowLogoutModal(true)}
-            style={{
-              width: '100%', padding: '8px',
-              background: 'rgba(239,68,68,0.15)', color: '#fca5a5',
-              border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
-              cursor: 'pointer', fontSize: 12, fontWeight: 600,
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.25)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
-          >
-            🚪 Logout
-          </button>
-        </div>
-      </aside>
 
-      {/* ══════════════════════════════
-          MOBILE BOTTOM NAV
-      ══════════════════════════════ */}
+          {/* Nav Links */}
+          <nav style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {visibleItems.map(item => {
+              const isActive = location.pathname === item.path
+              return (
+                <Link key={item.path} to={item.path} style={{
+                  display: 'flex', alignItems: 'center', gap: 9,
+                  padding: '10px 12px', borderRadius: 10, textDecoration: 'none',
+                  background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  color: isActive ? 'white' : 'rgba(255,255,255,0.65)',
+                  fontWeight: isActive ? 700 : 500, fontSize: 13.5,
+                  transition: 'all 0.15s',
+                  borderLeft: isActive ? '3px solid #4ade80' : '3px solid transparent',
+                }}
+                  onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
+                  onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  {item.label}
+                </Link>
+              )
+            })}
+          </nav>
+
+          {/* User + Logout */}
+          <div style={{ padding: '12px 10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 4px' }}>
+              <span style={{ fontSize: 18 }}>
+                {user.role === 'Admin' ? '👑' : user.role === 'Cashier' ? '🧑‍💼' : '🍳'}
+              </span>
+              <div>
+                <div style={{ color: 'white', fontSize: 13, fontWeight: 700 }}>{user.username}</div>
+                <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>{user.role}</div>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowLogoutModal(true)}
+              style={{
+                width: '100%', padding: '8px',
+                background: 'rgba(239,68,68,0.15)', color: '#fca5a5',
+                border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
+                cursor: 'pointer', fontSize: 12, fontWeight: 600,
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.25)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
+            >
+              🚪 Logout
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {/* MOBILE BOTTOM NAV */}
       <nav className="mobile-nav">
         {visibleItems.slice(0, 5).map(item => {
           const isActive = location.pathname === item.path
