@@ -1,4 +1,4 @@
-const API = 'https://bistro-pos-production-caa7.up.railway.app/api'
+const API = 'https://bistro-pos.onrender.com/api'
 
 const getToken = () => {
   try { return JSON.parse(localStorage.getItem('user') || '{}').token || '' } catch { return '' }
