@@ -180,7 +180,10 @@ app.get('/api/transactions', auth, async (req, res) => {
   try {
     const [transactions] = await query('SELECT * FROM transactions ORDER BY created_at DESC')
     const [items] = await query('SELECT * FROM transaction_items')
-    res.json(transactions.map(t => ({ ...t, items: items.filter(i => i.transaction_id === t.id) })))
+    res.json(transactions.map(t => ({
+      ...t,
+      items: items.filter(i => i.transaction_id === t.id)
+    })))
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -188,21 +191,51 @@ app.post('/api/transactions', auth, async (req, res) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    const { customer_name, table_no, total, amount_paid, change_amount, discount_type, discount_amount, payment_method, cashier_name, created_by, items, shift_id } = req.body
+    const {
+      customer_name, table_no, total, amount_paid, change_amount,
+      discount_type, discount_amount, payment_method, cashier_name,
+      created_by, items, shift_id
+    } = req.body
+
+    // ── FIX: log incoming items para ma-verify ──
+    console.log('📦 Transaction items received:', JSON.stringify(items))
+
     const result = await client.query(
       'INSERT INTO transactions (customer_name, table_no, total, amount_paid, change_amount, discount_type, discount_amount, payment_method, cashier_name, created_by, shift_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
-      [customer_name, table_no, total, amount_paid, change_amount, discount_type || 'None', discount_amount || 0, payment_method || 'Cash', cashier_name || 'Cashier', created_by || 'Cashier', shift_id || null]
+      [customer_name, table_no, total, amount_paid, change_amount,
+       discount_type || 'None', discount_amount || 0,
+       payment_method || 'Cash', cashier_name || 'Cashier',
+       created_by || 'Cashier', shift_id || null]
     )
     const transactionId = result.rows[0].id
+
     for (const item of items) {
-      await client.query('INSERT INTO transaction_items (transaction_id, item_name, price, qty, subtotal) VALUES ($1,$2,$3,$4,$5)',
-        [transactionId, item.name, item.price, item.qty, item.price * item.qty])
-      await client.query('UPDATE menu_items SET stock = GREATEST(stock - $1, 0) WHERE id = $2', [item.qty, item.id])
+      // ── FIX: explicitly use item.name as item_name ──
+      const itemName = String(item.name || '').trim()
+      const itemPrice = Number(item.price) || 0
+      const itemQty = Number(item.qty) || 1
+
+      console.log(`  → Inserting: "${itemName}" x${itemQty} @ ₱${itemPrice}`)
+
+      await client.query(
+        'INSERT INTO transaction_items (transaction_id, item_name, price, qty, subtotal) VALUES ($1,$2,$3,$4,$5)',
+        [transactionId, itemName, itemPrice, itemQty, itemPrice * itemQty]
+      )
+      await client.query(
+        'UPDATE menu_items SET stock = GREATEST(stock - $1, 0) WHERE id = $2',
+        [itemQty, item.id]
+      )
     }
+
     await client.query('COMMIT')
     res.json({ id: transactionId, success: true })
-  } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }) }
-  finally { client.release() }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('❌ Transaction error:', err.message)
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
 })
 
 app.put('/api/transactions/:id/void', auth, async (req, res) => {
@@ -261,7 +294,8 @@ app.put('/api/shifts/:id/close', auth, async (req, res) => {
       [req.params.id])
     const totalSales = txRows[0].total_sales || 0
     const txCount = txRows[0].tx_count || 0
-    await query("UPDATE shifts SET status = 'Closed', closing_cash = $1, total_sales = $2, transaction_count = $3, closed_at = NOW() WHERE id = $4",
+    await query(
+      "UPDATE shifts SET status = 'Closed', closing_cash = $1, total_sales = $2, transaction_count = $3, closed_at = NOW() WHERE id = $4",
       [closing_cash || 0, totalSales, txCount, req.params.id])
     res.json({ success: true, totalSales, txCount })
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -287,7 +321,8 @@ app.post('/api/kitchen/orders', auth, async (req, res) => {
       [table_no, cashier_name])
     const orderId = result.rows[0].id
     for (const item of items) {
-      await client.query('INSERT INTO kitchen_order_items (order_id, item_name, qty, notes) VALUES ($1,$2,$3,$4)',
+      await client.query(
+        'INSERT INTO kitchen_order_items (order_id, item_name, qty, notes) VALUES ($1,$2,$3,$4)',
         [orderId, item.name, item.qty, item.notes || ''])
     }
     await client.query('COMMIT')
@@ -308,7 +343,9 @@ app.put('/api/kitchen/orders/:id/status', auth, async (req, res) => {
 app.get('/api/alerts/low-stock', auth, async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 10
-    const [rows] = await query("SELECT * FROM menu_items WHERE stock <= $1 AND stock > 0 AND status = 'Available' ORDER BY stock ASC", [threshold])
+    const [rows] = await query(
+      "SELECT * FROM menu_items WHERE stock <= $1 AND stock > 0 AND status = 'Available' ORDER BY stock ASC",
+      [threshold])
     const [outRows] = await query("SELECT * FROM menu_items WHERE stock = 0 AND status = 'Available'")
     res.json({ lowStock: rows, outOfStock: outRows })
   } catch (err) { res.status(500).json({ error: err.message }) }
