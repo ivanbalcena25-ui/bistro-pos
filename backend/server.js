@@ -11,7 +11,8 @@ const app = express()
 const JWT_SECRET = process.env.JWT_SECRET || 'bistro_secret_key_change_in_production'
 
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'], allowedHeaders: ['Content-Type', 'Authorization'] }))
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -117,7 +118,9 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
 // ── MENU ──
 app.get('/api/menu', auth, async (req, res) => {
   try {
-    const [rows] = await query("SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status = 'Available'")
+    const [rows] = await query(
+      "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status = 'Available' ORDER BY id ASC"
+    )
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -136,8 +139,10 @@ app.post('/api/menu', auth, adminOnly, async (req, res) => {
 app.put('/api/menu/:id', auth, adminOnly, async (req, res) => {
   try {
     const { name, price, category, image, stock } = req.body
-    await query('UPDATE menu_items SET name = $1, price = $2, category = $3, image = $4, stock = $5 WHERE id = $6',
-      [name, price, category, image || null, stock ?? 0, req.params.id])
+    await query(
+      'UPDATE menu_items SET name = $1, price = $2, category = $3, image = $4, stock = $5 WHERE id = $6',
+      [name, price, category, image || null, stock ?? 0, req.params.id]
+    )
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -160,8 +165,10 @@ app.get('/api/tables', auth, async (req, res) => {
 app.put('/api/tables/number/:number', auth, async (req, res) => {
   try {
     const { status, customer } = req.body
-    await query('UPDATE tables_list SET status = $1, customer = $2, updated_at = NOW() WHERE number = $3',
-      [status, customer || '', req.params.number])
+    await query(
+      'UPDATE tables_list SET status = $1, customer = $2, updated_at = NOW() WHERE number = $3',
+      [status, customer || '', req.params.number]
+    )
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -169,8 +176,10 @@ app.put('/api/tables/number/:number', auth, async (req, res) => {
 app.put('/api/tables/:id', auth, async (req, res) => {
   try {
     const { status, customer } = req.body
-    await query('UPDATE tables_list SET status = $1, customer = $2, updated_at = NOW() WHERE id = $3',
-      [status, customer || '', req.params.id])
+    await query(
+      'UPDATE tables_list SET status = $1, customer = $2, updated_at = NOW() WHERE id = $3',
+      [status, customer || '', req.params.id]
+    )
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -234,8 +243,10 @@ app.post('/api/transactions', auth, async (req, res) => {
 app.put('/api/transactions/:id/void', auth, async (req, res) => {
   try {
     const { void_reason, void_by } = req.body
-    await query('UPDATE transactions SET voided = 1, void_reason = $1, void_by = $2 WHERE id = $3',
-      [void_reason || '', void_by || 'Cashier', req.params.id])
+    await query(
+      'UPDATE transactions SET voided = 1, void_reason = $1, void_by = $2 WHERE id = $3',
+      [void_reason || '', void_by || 'Cashier', req.params.id]
+    )
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -260,7 +271,8 @@ app.get('/api/shifts/active', auth, async (req, res) => {
   try {
     const [rows] = await query(
       "SELECT * FROM shifts WHERE cashier_id = $1 AND status = 'Open' ORDER BY opened_at DESC LIMIT 1",
-      [req.user.id])
+      [req.user.id]
+    )
     res.json(rows[0] || null)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -268,11 +280,15 @@ app.get('/api/shifts/active', auth, async (req, res) => {
 app.post('/api/shifts/open', auth, async (req, res) => {
   try {
     const { opening_cash } = req.body
-    const [existing] = await query("SELECT id FROM shifts WHERE cashier_id = $1 AND status = 'Open'", [req.user.id])
+    const [existing] = await query(
+      "SELECT id FROM shifts WHERE cashier_id = $1 AND status = 'Open'",
+      [req.user.id]
+    )
     if (existing.length > 0) return res.status(400).json({ error: 'You already have an open shift!' })
     const [rows] = await query(
       "INSERT INTO shifts (cashier_id, cashier_name, opening_cash, status, opened_at) VALUES ($1,$2,$3,'Open',NOW()) RETURNING id",
-      [req.user.id, req.user.username, opening_cash || 0])
+      [req.user.id, req.user.username, opening_cash || 0]
+    )
     res.json({ id: rows[0].id, success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -280,16 +296,21 @@ app.post('/api/shifts/open', auth, async (req, res) => {
 app.put('/api/shifts/:id/close', auth, async (req, res) => {
   try {
     const { closing_cash } = req.body
-    const [rows] = await query('SELECT * FROM shifts WHERE id = $1 AND cashier_id = $2', [req.params.id, req.user.id])
+    const [rows] = await query(
+      'SELECT * FROM shifts WHERE id = $1 AND cashier_id = $2',
+      [req.params.id, req.user.id]
+    )
     if (!rows.length) return res.status(404).json({ error: 'Shift not found' })
     const [txRows] = await query(
       'SELECT SUM(total) as total_sales, COUNT(*) as tx_count FROM transactions WHERE shift_id = $1 AND voided = 0',
-      [req.params.id])
+      [req.params.id]
+    )
     const totalSales = txRows[0].total_sales || 0
     const txCount = txRows[0].tx_count || 0
     await query(
       "UPDATE shifts SET status = 'Closed', closing_cash = $1, total_sales = $2, transaction_count = $3, closed_at = NOW() WHERE id = $4",
-      [closing_cash || 0, totalSales, txCount, req.params.id])
+      [closing_cash || 0, totalSales, txCount, req.params.id]
+    )
     res.json({ success: true, totalSales, txCount })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -297,9 +318,12 @@ app.put('/api/shifts/:id/close', auth, async (req, res) => {
 // ── KITCHEN ──
 app.get('/api/kitchen/orders', auth, async (req, res) => {
   try {
-    const [orders] = await query("SELECT * FROM kitchen_orders WHERE status != 'Served' ORDER BY created_at ASC")
+    const [orders] = await query(
+      "SELECT * FROM kitchen_orders WHERE status != 'Served' ORDER BY created_at ASC"
+    )
     const [items] = await query(
-      "SELECT * FROM kitchen_order_items WHERE order_id IN (SELECT id FROM kitchen_orders WHERE status != 'Served')")
+      "SELECT * FROM kitchen_order_items WHERE order_id IN (SELECT id FROM kitchen_orders WHERE status != 'Served')"
+    )
     res.json(orders.map(o => ({ ...o, items: items.filter(i => i.order_id === o.id) })))
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -311,23 +335,32 @@ app.post('/api/kitchen/orders', auth, async (req, res) => {
     const { table_no, cashier_name, items } = req.body
     const result = await client.query(
       "INSERT INTO kitchen_orders (table_no, cashier_name, status, created_at) VALUES ($1,$2,'Pending',NOW()) RETURNING id",
-      [table_no, cashier_name])
+      [table_no, cashier_name]
+    )
     const orderId = result.rows[0].id
     for (const item of items) {
       await client.query(
         'INSERT INTO kitchen_order_items (order_id, item_name, qty, notes) VALUES ($1,$2,$3,$4)',
-        [orderId, item.name, item.qty, item.notes || ''])
+        [orderId, item.name, item.qty, item.notes || '']
+      )
     }
     await client.query('COMMIT')
     res.json({ id: orderId, success: true })
-  } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: err.message }) }
-  finally { client.release() }
+  } catch (err) {
+    await client.query('ROLLBACK')
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
 })
 
 app.put('/api/kitchen/orders/:id/status', auth, async (req, res) => {
   try {
     const { status } = req.body
-    await query('UPDATE kitchen_orders SET status = $1, updated_at = NOW() WHERE id = $2', [status, req.params.id])
+    await query(
+      'UPDATE kitchen_orders SET status = $1, updated_at = NOW() WHERE id = $2',
+      [status, req.params.id]
+    )
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -338,8 +371,11 @@ app.get('/api/alerts/low-stock', auth, async (req, res) => {
     const threshold = parseInt(req.query.threshold) || 10
     const [rows] = await query(
       "SELECT * FROM menu_items WHERE stock <= $1 AND stock > 0 AND status = 'Available' ORDER BY stock ASC",
-      [threshold])
-    const [outRows] = await query("SELECT * FROM menu_items WHERE stock = 0 AND status = 'Available'")
+      [threshold]
+    )
+    const [outRows] = await query(
+      "SELECT * FROM menu_items WHERE stock = 0 AND status = 'Available'"
+    )
     res.json({ lowStock: rows, outOfStock: outRows })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
