@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Navbar from '../components/Navbar'
-import { FaMoneyBillWave, FaShoppingCart, FaCoffee, FaDownload, FaCalendarAlt, FaChevronLeft, FaChevronRight, FaUser } from 'react-icons/fa'
+import { FaMoneyBillWave, FaShoppingCart, FaCoffee, FaDownload, FaCalendarAlt, FaChevronLeft, FaChevronRight, FaUser, FaPrint } from 'react-icons/fa'
 import { getTransactions } from '../api'
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -75,6 +75,7 @@ function Reports() {
   const [endDate, setEndDate] = useState('')
   const [showVoided, setShowVoided] = useState(true)
   const [cashierFilter, setCashierFilter] = useState('All')
+  const [expandedRows, setExpandedRows] = useState(new Set())
 
   const loadData = async () => {
     setLoading(true)
@@ -93,6 +94,14 @@ function Reports() {
     const interval = setInterval(loadData, 10000)
     return () => clearInterval(interval)
   }, [])
+
+  const toggleRow = (id) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   const getFiltered = () => {
     const now = new Date()
@@ -134,9 +143,10 @@ function Reports() {
   const handleExport = () => {
     const list = displayed
     if (list.length === 0) return alert('No transactions to export!')
-    let csv = 'ID,Date,Table,Cashier,Payment,Total,Status,Void Reason\n'
+    let csv = 'Transaction #,Date,Table,Cashier,Payment,Items,Total,Status,Void Reason\n'
     list.forEach(t => {
-      csv += `${t.id},"${t.created_at}","Table ${t.table_no}","${t.cashier_name || '—'}","${t.payment_method || 'Cash'}",${t.total},"${t.voided ? 'VOIDED' : 'Valid'}","${t.void_reason || ''}"\n`
+      const itemsSummary = (t.items || []).map(i => `${i.item_name || i.name} x${i.qty}`).join(' | ')
+      csv += `${t.id},"${t.created_at}","Table ${t.table_no}","${t.cashier_name || '—'}","${t.payment_method || 'Cash'}","${itemsSummary}",${t.total},"${t.voided ? 'VOIDED' : 'Valid'}","${t.void_reason || ''}"\n`
     })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
@@ -144,11 +154,122 @@ function Reports() {
     a.click()
   }
 
+  // ── PRINT RECEIPT from Reports ──
+  const printReceipt = (t) => {
+    const items = t.items || []
+    const date = new Date(t.created_at).toLocaleString('en-PH')
+    const receiptHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Receipt #${t.id}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      width: 302px;
+      margin: 0 auto;
+      padding: 10px 10px 80px;
+      background: white;
+      color: #000;
+    }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .divider { border-top: 1px dashed #000; margin: 6px 0; }
+    .double-divider { border-top: 2px solid #000; margin: 6px 0; }
+    .row { display: flex; justify-content: space-between; margin: 3px 0; }
+    .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin: 4px 0; }
+    .item-name { flex: 1; word-wrap: break-word; }
+    .item-price { text-align: right; min-width: 70px; }
+    .big { font-size: 16px; font-weight: bold; }
+    .barcode { font-size: 30px; letter-spacing: 4px; margin: 8px 0; }
+    @media print {
+      body { width: 302px; padding-bottom: 10px; }
+      @page { margin: 0; size: 80mm auto; }
+      .preview-controls { display: none !important; }
+    }
+    .preview-controls {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #1e293b; padding: 12px 20px;
+      display: flex; gap: 10px; justify-content: center;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
+    }
+    .btn-print {
+      padding: 10px 28px; background: #16a34a; color: white;
+      border: none; border-radius: 8px; font-size: 14px;
+      font-weight: 700; cursor: pointer;
+    }
+    .btn-close {
+      padding: 10px 28px; background: #475569; color: white;
+      border: none; border-radius: 8px; font-size: 14px;
+      font-weight: 700; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="center" style="margin-bottom:8px">
+    <div class="big">VS HOTEL BISTRO</div>
+    <div style="font-size:10px; margin-top:2px; letter-spacing:1px;">- - OFFICIAL RECEIPT - -</div>
+  </div>
+  <div class="divider"></div>
+  <div class="row"><span>Transaction #:</span><span><b>${t.id}</b></span></div>
+  <div class="row"><span>Date:</span><span>${date}</span></div>
+  <div class="row"><span>Table:</span><span><b>Table ${t.table_no}</b></span></div>
+  <div class="row"><span>Cashier:</span><span>${t.cashier_name || '—'}</span></div>
+  <div class="row"><span>Payment:</span><span><b>${t.payment_method || 'Cash'}</b></span></div>
+  <div class="divider"></div>
+  <div style="font-size:11px; font-weight:bold; margin-bottom:4px;">ITEMS ORDERED:</div>
+  ${items.map(i => `
+    <div class="row">
+      <span class="item-name">${i.item_name || i.name} x${i.qty}</span>
+      <span class="item-price">&#8369;${(Number(i.price) * Number(i.qty)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+    </div>
+  `).join('')}
+  ${items.length === 0 ? '<div style="font-size:11px;color:#666;padding-left:4px;">No item details available.</div>' : ''}
+  <div class="divider"></div>
+  <div class="double-divider"></div>
+  <div class="total-row">
+    <span>TOTAL DUE</span>
+    <span>&#8369;${Number(t.total).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+  </div>
+  <div class="double-divider"></div>
+  ${(t.payment_method || 'Cash') === 'Cash' ? `
+    <div class="row"><span>Cash Tendered</span><span>&#8369;${Number(t.amount_paid || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+    <div class="row bold"><span>Change</span><span>&#8369;${Number(t.change_amount || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+  ` : `
+    <div class="row center" style="justify-content:center; margin:4px 0;">
+      <span>** Paid via <b>${t.payment_method}</b> **</span>
+    </div>
+  `}
+  ${t.voided ? `
+    <div class="divider"></div>
+    <div class="center" style="color:#ef4444; font-weight:bold; font-size:13px;">*** VOIDED ***</div>
+    ${t.void_reason ? `<div class="center" style="font-size:11px; color:#666;">Reason: ${t.void_reason}</div>` : ''}
+  ` : ''}
+  <div class="divider"></div>
+  <div class="center" style="margin-top:8px">
+    <div class="barcode">|||||||||||||||</div>
+    <div style="font-size:10px; letter-spacing:2px; margin-bottom:6px;">${String(t.id).padStart(10, '0')}</div>
+    <div style="font-size:12px; font-weight:bold;">Thank you for dining with us!</div>
+    <div style="font-size:10px; margin-top:3px; color:#333;">Please come again :-)</div>
+    <div style="font-size:9px; color:#555; margin-top:6px; letter-spacing:1px;">VS HOTEL BISTRO</div>
+  </div>
+  <div class="preview-controls">
+    <button class="btn-print" onclick="window.print()">&#128438; Print Receipt</button>
+    <button class="btn-close" onclick="window.close()">&#x2715; Close</button>
+  </div>
+</body>
+</html>`
+    const win = window.open('', '_blank', 'width=380,height=700,scrollbars=yes')
+    if (!win) { alert('Pop-up blocked! Please allow pop-ups.'); return }
+    win.document.write(receiptHTML)
+    win.document.close()
+    win.focus()
+  }
+
   const allFiltered = getFiltered()
   const displayed = showVoided ? allFiltered : allFiltered.filter(t => !t.voided)
   const stats = getFilteredStats(allFiltered)
-
-  // Get unique cashiers for filter
   const allCashiers = ['All', ...new Set(transactions.map(t => t.cashier_name).filter(Boolean))]
 
   const filters = [
@@ -175,7 +296,6 @@ function Reports() {
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#ef4444', padding: '10px 16px', borderRadius: 10, marginBottom: 16, fontSize: 14, fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
             <span>❌ {error}</span>
@@ -251,30 +371,87 @@ function Reports() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Receipt ID</th>
+                  <th>Transaction #</th>
                   <th>Date & Time</th>
                   <th>Table</th>
                   <th>Cashier</th>
                   <th>Payment</th>
+                  <th>Items Ordered</th>
                   <th>Total / Status</th>
+                  <th>Receipt</th>
                 </tr>
               </thead>
               <tbody>
                 {displayed.length === 0 ? (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 56, color: '#94a3b8' }}>
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: 56, color: '#94a3b8' }}>
                     <div style={{ fontSize: 40, marginBottom: 10 }}>📋</div>
                     <div style={{ fontSize: 15, fontWeight: 600 }}>No transactions found.</div>
                   </td></tr>
                 ) : displayed.map((t, i) => {
                   const isVoided = !!t.voided
+                  const items = t.items || []
+                  const isExpanded = expandedRows.has(t.id)
+                  const previewItems = isExpanded ? items : items.slice(0, 2)
+
                   return (
-                    <tr key={i} style={{ background: isVoided ? '#fff5f5' : 'inherit' }}>
+                    <tr key={t.id} style={{ background: isVoided ? '#fff5f5' : 'inherit' }}>
                       <td style={{ color: '#94a3b8', fontWeight: 700, fontSize: 14 }}>{i + 1}</td>
-                      <td><span style={{ background: '#f8fafc', color: '#475569', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700, border: '1px solid #e2e8f0' }}>#{t.id}</span></td>
+
+                      {/* Transaction # */}
+                      <td>
+                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700, border: '1px solid #bbf7d0' }}>
+                          TXN-{String(t.id).padStart(5, '0')}
+                        </span>
+                      </td>
+
                       <td style={{ fontSize: 13, color: '#475569' }}>{new Date(t.created_at).toLocaleString()}</td>
-                      <td><span style={{ background: '#f0fdf4', color: '#16a34a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700, border: '1px solid #bbf7d0' }}>Table {t.table_no}</span></td>
-                      <td>{t.cashier_name ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f0fdf4', color: '#16a34a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600, border: '1px solid #bbf7d0' }}>🧑‍💼 {t.cashier_name}</span> : <span style={{ color: '#cbd5e1', fontSize: 14 }}>—</span>}</td>
-                      <td><span style={{ background: '#f8fafc', color: '#475569', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 500, border: '1px solid #e2e8f0' }}>{t.payment_method || 'Cash'}</span></td>
+
+                      {/* Table # */}
+                      <td>
+                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700, border: '1px solid #bbf7d0' }}>
+                          Table {t.table_no}
+                        </span>
+                      </td>
+
+                      <td>
+                        {t.cashier_name
+                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f0fdf4', color: '#16a34a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600, border: '1px solid #bbf7d0' }}>🧑‍💼 {t.cashier_name}</span>
+                          : <span style={{ color: '#cbd5e1', fontSize: 14 }}>—</span>}
+                      </td>
+
+                      <td>
+                        <span style={{ background: '#f8fafc', color: '#475569', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 500, border: '1px solid #e2e8f0' }}>
+                          {t.payment_method || 'Cash'}
+                        </span>
+                      </td>
+
+                      {/* Items Ordered */}
+                      <td style={{ maxWidth: 220 }}>
+                        {items.length === 0 ? (
+                          <span style={{ color: '#cbd5e1', fontSize: 13 }}>—</span>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {previewItems.map((item, idx) => (
+                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '2px 8px', fontSize: 12, color: '#334155', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                                  {item.item_name || item.name}
+                                  <span style={{ color: '#16a34a', fontWeight: 700, marginLeft: 4 }}>×{item.qty}</span>
+                                </span>
+                              </div>
+                            ))}
+                            {items.length > 2 && (
+                              <button
+                                onClick={() => toggleRow(t.id)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', fontSize: 11, fontWeight: 700, textAlign: 'left', padding: '2px 0' }}
+                              >
+                                {isExpanded ? '▲ Show less' : `+${items.length - 2} more items`}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Total / Status */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                           <span style={{ fontWeight: 800, color: isVoided ? '#94a3b8' : '#16a34a', fontSize: 15, textDecoration: isVoided ? 'line-through' : 'none' }}>
@@ -288,6 +465,26 @@ function Reports() {
                             </div>
                           )}
                         </div>
+                      </td>
+
+                      {/* Print Receipt Button */}
+                      <td>
+                        <button
+                          onClick={() => printReceipt(t)}
+                          title="Print Receipt"
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            padding: '6px 12px', borderRadius: 8, border: 'none',
+                            background: isVoided ? '#f1f5f9' : '#f0fdf4',
+                            color: isVoided ? '#94a3b8' : '#16a34a',
+                            cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={e => { if (!isVoided) e.currentTarget.style.background = '#dcfce7' }}
+                          onMouseLeave={e => { e.currentTarget.style.background = isVoided ? '#f1f5f9' : '#f0fdf4' }}
+                        >
+                          <FaPrint size={11} /> {isVoided ? 'Voided' : 'Print'}
+                        </button>
                       </td>
                     </tr>
                   )
