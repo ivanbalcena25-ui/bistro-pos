@@ -577,7 +577,7 @@ function Transaction() {
               <button onClick={() => setShowAlerts(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#fffbeb', color: '#d97706', border: '1.5px solid #fde68a', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>⚠️ {totalAlerts}</button>
             )}
             <button onClick={openSettingsModal} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}><FaCog size={isMobile ? 11 : 13} /></button>
-            <button onClick={() => setShowReprintModal(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}><FaPrint size={isMobile ? 11 : 12} /></button>
+            
             {!isMobile && <>
               <button onClick={() => setShowXReading(true)} style={{ padding: '10px 16px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><FaFileAlt size={12} /> X</button>
               <button onClick={() => setShowZReading(true)} style={{ padding: '10px 16px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><FaFileAlt size={12} /> Z</button>
