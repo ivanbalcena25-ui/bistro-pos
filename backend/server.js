@@ -114,10 +114,9 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ── MENU ──
 app.get('/api/menu', auth, async (req, res) => {
   try {
-    const [rows] = await query("SELECT * FROM menu_items WHERE status = 'Available'")
+    const [rows] = await query("SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status = 'Available'")
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })

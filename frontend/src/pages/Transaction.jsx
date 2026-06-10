@@ -94,7 +94,10 @@ function Transaction() {
 
   const loadMenu = async () => {
     setLoadingMenu(true)
-    try { const d = await getMenu(); setAvailableItems(Array.isArray(d) ? d.filter(i => i.status === 'Available') : []) }
+    try {
+      const d = await getMenu()
+      setAvailableItems(Array.isArray(d) ? d.filter(i => i.status === 'Available') : [])
+    }
     catch (e) { setError('Failed to load menu: ' + e.message) }
     setLoadingMenu(false)
   }
@@ -125,7 +128,18 @@ function Transaction() {
       const currentQty = exists ? exists.qty : 0
       if (currentQty >= (item.stock ?? 999)) { alert(`Only ${item.stock} left in stock!`); return prev }
       if (exists) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-      return [...prev, { ...item, qty: 1, discount: 'None' }]
+      // ── strip image from cart to keep state light, keep imageUrl separate ──
+      return [...prev, {
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        category: item.category,
+        stock: item.stock,
+        status: item.status,
+        imageUrl: item.image || null,
+        qty: 1,
+        discount: 'None'
+      }]
     })
     if (isMobile) setShowCart(true)
   }
@@ -179,22 +193,38 @@ function Transaction() {
     if (paymentMethod === 'Cash' && !amountPaid) return alert('Please enter amount paid!')
     if (paymentMethod === 'Cash' && parseFloat(amountPaid) < getTotal()) return alert('Insufficient payment!')
     setLoadingCheckout(true)
-    const total = getTotal(); const paid = paymentMethod === 'Cash' ? parseFloat(amountPaid) : total; const change = paymentMethod === 'Cash' ? getChange() : 0
+    const total = getTotal()
+    const paid = paymentMethod === 'Cash' ? parseFloat(amountPaid) : total
+    const change = paymentMethod === 'Cash' ? getChange() : 0
     try {
       const result = await addTransaction({
         customer_name: `Table ${num}`, table_no: num, total, amount_paid: paid, change_amount: change,
         discount_type: 'None', discount_amount: 0, vat_amount: getVatAmount(), payment_method: paymentMethod,
         cashier_name: user.username || 'Cashier', created_by: user.username || 'Cashier',
         shift_id: currentShift?.id || null,
+        // ── send only id, name, price, qty — no image ──
         items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
       })
       setLastTxId(result.id); setLastTableNo(num)
-      try { await addKitchenOrder({ table_no: num, cashier_name: user.username || 'Cashier', items: cart.map(i => ({ name: i.name, qty: i.qty })) }) } catch {}
+      try {
+        await addKitchenOrder({
+          table_no: num, cashier_name: user.username || 'Cashier',
+          items: cart.map(i => ({ name: i.name, qty: i.qty }))
+        })
+      } catch {}
       await updateTableByNumber(num, { status: 'Occupied', customer: `Table ${num}` })
       const receiptData = {
-        id: result.id, tableNo, items: cart.map(i => ({ ...i, item_discount: i.discount || 'None', item_discount_amount: getItemDiscountAmt(i), item_total: getItemTotal(i) })),
-        subtotal: getSubtotalBeforeVat(), vat_enabled: settings.vatEnabled, vat_rate: settings.vatRate, vat_amount: getVatAmount(),
-        total, paid, change, payment_method: paymentMethod, cashier_name: user.username || 'Cashier',
+        id: result.id, tableNo,
+        items: cart.map(i => ({
+          name: i.name, price: i.price, qty: i.qty,
+          item_discount: i.discount || 'None',
+          item_discount_amount: getItemDiscountAmt(i),
+          item_total: getItemTotal(i)
+        })),
+        subtotal: getSubtotalBeforeVat(), vat_enabled: settings.vatEnabled,
+        vat_rate: settings.vatRate, vat_amount: getVatAmount(),
+        total, paid, change, payment_method: paymentMethod,
+        cashier_name: user.username || 'Cashier',
         date: new Date().toLocaleString(), voided: false,
       }
       setReceipt(receiptData)
@@ -245,7 +275,10 @@ function Transaction() {
     if (tx.voided) return alert('This transaction is voided.')
     const r = {
       id: tx.id, tableNo: tx.table_no,
-      items: (tx.items || []).map(i => ({ name: i.item_name, price: i.price, qty: i.qty, item_discount: 'None', item_discount_amount: 0, item_total: i.price * i.qty })),
+      items: (tx.items || []).map(i => ({
+        name: i.item_name, price: i.price, qty: i.qty,
+        item_discount: 'None', item_discount_amount: 0, item_total: i.price * i.qty
+      })),
       subtotal: tx.total, vat_enabled: false, vat_amount: 0, vat_rate: 0,
       total: tx.total, paid: tx.amount_paid, change: tx.change_amount,
       payment_method: tx.payment_method || 'Cash', cashier_name: tx.cashier_name,
@@ -266,7 +299,6 @@ function Transaction() {
   const updateDiscount = (idx, field, val) => setTmpSettings(prev => { const d = [...prev.discounts]; d[idx] = { ...d[idx], [field]: val }; return { ...prev, discounts: d } })
   const removeDiscount = (idx) => setTmpSettings(prev => ({ ...prev, discounts: prev.discounts.filter((_, i) => i !== idx) }))
 
-  // ── UPDATED PRINT RECEIPT FUNCTION ──────────────────────────────────────────
   const printReceipt = (r, preview = false) => {
     const receiptHTML = `<!DOCTYPE html>
 <html>
@@ -274,15 +306,7 @@ function Transaction() {
   <title>Receipt #${r.id}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 12px;
-      width: 302px;
-      margin: 0 auto;
-      padding: 10px 10px ${preview ? '80px' : '10px'};
-      background: white;
-      color: #000;
-    }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: 302px; margin: 0 auto; padding: 10px 10px ${preview ? '80px' : '10px'}; background: white; color: #000; }
     .center { text-align: center; }
     .bold { font-weight: bold; }
     .divider { border-top: 1px dashed #000; margin: 6px 0; }
@@ -294,29 +318,10 @@ function Transaction() {
     .discount { font-size: 11px; color: #333; padding-left: 12px; margin-bottom: 2px; }
     .big { font-size: 16px; font-weight: bold; }
     .barcode { font-size: 30px; letter-spacing: 4px; margin: 8px 0; }
-    @media print {
-      body { width: 302px; padding-bottom: 10px; }
-      @page { margin: 0; size: 80mm auto; }
-      .preview-controls { display: none !important; }
-    }
-    .preview-controls {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      background: #1e293b; padding: 12px 20px;
-      display: flex; gap: 10px; justify-content: center;
-      box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
-    }
-    .btn-print {
-      padding: 10px 28px; background: #16a34a; color: white;
-      border: none; border-radius: 8px; font-size: 14px;
-      font-weight: 700; cursor: pointer; letter-spacing: 0.5px;
-    }
-    .btn-close {
-      padding: 10px 28px; background: #475569; color: white;
-      border: none; border-radius: 8px; font-size: 14px;
-      font-weight: 700; cursor: pointer;
-    }
-    .btn-print:hover { background: #15803d; }
-    .btn-close:hover { background: #334155; }
+    @media print { body { width: 302px; padding-bottom: 10px; } @page { margin: 0; size: 80mm auto; } .preview-controls { display: none !important; } }
+    .preview-controls { position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; padding: 12px 20px; display: flex; gap: 10px; justify-content: center; box-shadow: 0 -4px 12px rgba(0,0,0,0.3); }
+    .btn-print { padding: 10px 28px; background: #16a34a; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .btn-close { padding: 10px 28px; background: #475569; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -324,18 +329,14 @@ function Transaction() {
     <div class="big">VS HOTEL BISTRO</div>
     <div style="font-size:10px; margin-top:2px; letter-spacing:1px;">- - OFFICIAL RECEIPT - -</div>
   </div>
-
   <div class="divider"></div>
-
-  <div class="row"><span>Receipt #:</span><span><b>${r.id || 'N/A'}</b></span></div>
+  <div class="row"><span>Transaction #:</span><span><b>TXN-${String(r.id || '').padStart(5, '0')}</b></span></div>
   <div class="row"><span>Date:</span><span>${r.date}</span></div>
   <div class="row"><span>Table:</span><span><b>Table ${r.tableNo}</b></span></div>
   <div class="row"><span>Cashier:</span><span>${r.cashier_name}</span></div>
   <div class="row"><span>Payment:</span><span><b>${r.payment_method}</b></span></div>
-
   <div class="divider"></div>
   <div style="font-size:11px; font-weight:bold; margin-bottom:4px;">ITEMS ORDERED:</div>
-
   ${r.items.map(i => `
     <div class="row">
       <span class="item-name">${i.name} x${i.qty}</span>
@@ -345,32 +346,19 @@ function Transaction() {
       ? `<div class="discount">  Disc (${i.item_discount}): -&#8369;${Number(i.item_discount_amount).toFixed(2)}</div>`
       : ''}
   `).join('')}
-
   <div class="divider"></div>
-
   ${r.vat_enabled ? `
     <div class="row"><span>Subtotal</span><span>&#8369;${Number(r.subtotal).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
     <div class="row"><span>VAT (${r.vat_rate}%)</span><span>&#8369;${Number(r.vat_amount).toFixed(2)}</span></div>
   ` : ''}
-
   <div class="double-divider"></div>
-  <div class="total-row">
-    <span>TOTAL DUE</span>
-    <span>&#8369;${Number(r.total).toLocaleString('en-PH', {minimumFractionDigits:2})}</span>
-  </div>
+  <div class="total-row"><span>TOTAL DUE</span><span>&#8369;${Number(r.total).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
   <div class="double-divider"></div>
-
   ${r.payment_method === 'Cash' ? `
     <div class="row"><span>Cash Tendered</span><span>&#8369;${Number(r.paid).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
     <div class="row bold"><span>Change</span><span>&#8369;${Number(r.change).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
-  ` : `
-    <div class="row center" style="justify-content:center; margin:4px 0;">
-      <span>** Paid via <b>${r.payment_method}</b> **</span>
-    </div>
-  `}
-
+  ` : `<div class="row center" style="justify-content:center; margin:4px 0;"><span>** Paid via <b>${r.payment_method}</b> **</span></div>`}
   <div class="divider"></div>
-
   <div class="center" style="margin-top:8px">
     <div class="barcode">|||||||||||||||</div>
     <div style="font-size:10px; letter-spacing:2px; margin-bottom:6px;">${String(r.id || '').padStart(10, '0')}</div>
@@ -378,27 +366,16 @@ function Transaction() {
     <div style="font-size:10px; margin-top:3px; color:#333;">Please come again :-)</div>
     <div style="font-size:9px; color:#555; margin-top:6px; letter-spacing:1px;">VS HOTEL BISTRO</div>
   </div>
-
-  ${preview ? `
-  <div class="preview-controls">
-    <button class="btn-print" onclick="window.print()">&#128438; Print Receipt</button>
-    <button class="btn-close" onclick="window.close()">&#x2715; Close</button>
-  </div>
-  ` : ''}
+  ${preview ? `<div class="preview-controls"><button class="btn-print" onclick="window.print()">&#128438; Print Receipt</button><button class="btn-close" onclick="window.close()">&#x2715; Close</button></div>` : ''}
 </body>
 </html>`
-
     const win = window.open('', '_blank', `width=380,height=${preview ? 700 : 600},scrollbars=yes`)
     if (!win) { alert('Pop-up blocked! Please allow pop-ups for this site.'); return }
     win.document.write(receiptHTML)
     win.document.close()
     win.focus()
-
-    if (!preview) {
-      setTimeout(() => { win.print(); win.close() }, 600)
-    }
+    if (!preview) { setTimeout(() => { win.print(); win.close() }, 600) }
   }
-  // ────────────────────────────────────────────────────────────────────────────
 
   const getStockBadge = (item) => {
     const s = item.stock ?? 0
@@ -488,13 +465,11 @@ function Transaction() {
           <button onClick={() => setShowCart(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#64748b' }}>✕</button>
         )}
       </div>
-
       <div>
         <label style={lbl}>Table Number</label>
         <input type="number" placeholder={`1–${TOTAL_TABLES}`} value={tableNo} onChange={handleTableChange} style={{ borderColor: tableError ? '#ef4444' : undefined }} />
         {tableError && <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#ef4444', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginTop: 6, fontWeight: 600 }}>🚫 {tableError}</div>}
       </div>
-
       <div>
         <label style={lbl}>Payment Method</label>
         <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
@@ -506,7 +481,6 @@ function Transaction() {
           </optgroup>
         </select>
       </div>
-
       {cart.length === 0 ? (
         <div className="empty-state" style={{ padding: 20 }}>
           <div style={{ fontSize: 34 }}>🛒</div>
@@ -539,7 +513,6 @@ function Transaction() {
           ))}
         </div>
       )}
-
       <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 14px', marginTop: 4 }}>
         {settings.vatEnabled && (
           <>
@@ -549,7 +522,6 @@ function Transaction() {
         )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, fontSize: 16, color: '#0f172a' }}><span>Total</span><span>₱{total.toLocaleString()}</span></div>
       </div>
-
       {paymentMethod === 'Cash' && (
         <>
           <div>
@@ -564,25 +536,21 @@ function Transaction() {
           )}
         </>
       )}
-
       {E_WALLETS.includes(paymentMethod) && (
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 8 }}>
           <FaQrcode /> QR code will appear after checkout.
         </div>
       )}
-
       {!activeShift && (
         <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#ef4444', padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
           🔴 Open a shift first.
         </div>
       )}
-
       <button className="btn-primary btn-checkout" onClick={handleCheckout}
         disabled={!!tableError || loadingCheckout || !activeShift}
         style={{ opacity: (tableError || loadingCheckout || !activeShift) ? 0.6 : 1, cursor: !activeShift ? 'not-allowed' : 'pointer' }}>
         {loadingCheckout ? '⏳ Processing...' : <><FaPrint size={14} /> Checkout & Print</>}
       </button>
-
       {receipt && (
         <button onClick={() => setShowVoidModal(true)} style={{ width: '100%', padding: '11px', background: '#fef2f2', color: '#ef4444', border: '1.5px solid #fca5a5', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
           <FaTimes size={13} /> Void Last Transaction
@@ -595,60 +563,37 @@ function Transaction() {
     <div className="page-container">
       <Navbar />
       <div className="page-content">
-
-        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <h1 style={{ margin: 0, fontSize: isMobile ? 18 : 26 }}>Transaction</h1>
             {activeShift ? (
               <span style={{ background: '#f0fdf4', border: '1.5px solid #bbf7d0', color: '#16a34a', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 }}>🟢 Shift #{activeShift.id}</span>
             ) : (
-              <span style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#ef4444', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, cursor: 'pointer' }} onClick={() => setShowShiftModal(true)}>
-                🔴 No Shift
-              </span>
+              <span style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#ef4444', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, cursor: 'pointer' }} onClick={() => setShowShiftModal(true)}>🔴 No Shift</span>
             )}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {totalAlerts > 0 && (
-              <button onClick={() => setShowAlerts(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#fffbeb', color: '#d97706', border: '1.5px solid #fde68a', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>
-                ⚠️ {totalAlerts}
-              </button>
+              <button onClick={() => setShowAlerts(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#fffbeb', color: '#d97706', border: '1.5px solid #fde68a', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>⚠️ {totalAlerts}</button>
             )}
-            <button onClick={openSettingsModal} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>
-              <FaCog size={isMobile ? 11 : 13} />
-            </button>
-            <button onClick={() => setShowReprintModal(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>
-              <FaPrint size={isMobile ? 11 : 12} />
-            </button>
+            <button onClick={openSettingsModal} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}><FaCog size={isMobile ? 11 : 13} /></button>
+            <button onClick={() => setShowReprintModal(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}><FaPrint size={isMobile ? 11 : 12} /></button>
             {!isMobile && <>
-              <button onClick={() => setShowXReading(true)} style={{ padding: '10px 16px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                <FaFileAlt size={12} /> X
-              </button>
-              <button onClick={() => setShowZReading(true)} style={{ padding: '10px 16px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                <FaFileAlt size={12} /> Z
-              </button>
+              <button onClick={() => setShowXReading(true)} style={{ padding: '10px 16px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><FaFileAlt size={12} /> X</button>
+              <button onClick={() => setShowZReading(true)} style={{ padding: '10px 16px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><FaFileAlt size={12} /> Z</button>
             </>}
             {activeShift ? (
-              <button onClick={() => setShowShiftModal(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>
-                {isMobile ? 'Close' : 'Close Shift'}
-              </button>
+              <button onClick={() => setShowShiftModal(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#ef4444', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>{isMobile ? 'Close' : 'Close Shift'}</button>
             ) : (
-              <button onClick={() => setShowShiftModal(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>
-                {isMobile ? 'Open' : 'Open Shift'}
-              </button>
+              <button onClick={() => setShowShiftModal(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>{isMobile ? 'Open' : 'Open Shift'}</button>
             )}
           </div>
         </div>
 
-        {/* Mobile X/Z Reading row */}
         {isMobile && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <button onClick={() => setShowXReading(true)} style={{ flex: 1, padding: '8px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-              📊 X-Reading
-            </button>
-            <button onClick={() => setShowZReading(true)} style={{ flex: 1, padding: '8px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-              📋 Z-Reading
-            </button>
+            <button onClick={() => setShowXReading(true)} style={{ flex: 1, padding: '8px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📊 X-Reading</button>
+            <button onClick={() => setShowZReading(true)} style={{ flex: 1, padding: '8px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>📋 Z-Reading</button>
           </div>
         )}
 
@@ -666,7 +611,6 @@ function Transaction() {
           </div>
         )}
 
-        {/* Table Status — hide on mobile to save space */}
         {!isMobile && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', background: 'white', padding: '12px 16px', borderRadius: 14, marginBottom: 18, boxShadow: '0 1px 4px rgba(22,163,74,0.08)', border: '1px solid #d1fae5' }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', alignSelf: 'center', marginRight: 4 }}>Tables:</span>
@@ -681,7 +625,6 @@ function Transaction() {
           </div>
         )}
 
-        {/* MAIN LAYOUT */}
         {isMobile ? (
           <div>
             <div className="category-tabs" style={{ overflowX: 'auto', flexWrap: 'nowrap', paddingBottom: 4 }}>
@@ -691,7 +634,6 @@ function Transaction() {
                 </button>
               ))}
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
               {loadingMenu ? (
                 <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: 40, color: '#94a3b8' }}>
@@ -713,23 +655,13 @@ function Transaction() {
                     <div style={{ padding: '8px 10px' }}>
                       <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</div>
                       <div style={{ fontWeight: 800, fontSize: 15, color: '#16a34a', marginBottom: 4 }}>₱{Number(item.price).toLocaleString()}</div>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: badge.bg, color: badge.color, padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700 }}>
-                        📦 {badge.label}
-                      </div>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: badge.bg, color: badge.color, padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700 }}>📦 {badge.label}</div>
                     </div>
                   </div>
                 )
               })}
             </div>
-
-            {/* Mobile Cart FAB */}
-            <button onClick={() => setShowCart(true)} style={{
-              position: 'fixed', bottom: 75, right: 16, zIndex: 998,
-              background: '#16a34a', color: 'white', border: 'none',
-              borderRadius: '50%', width: 56, height: 56,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(22,163,74,0.4)', cursor: 'pointer', fontSize: 20
-            }}>
+            <button onClick={() => setShowCart(true)} style={{ position: 'fixed', bottom: 75, right: 16, zIndex: 998, background: '#16a34a', color: 'white', border: 'none', borderRadius: '50%', width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(22,163,74,0.4)', cursor: 'pointer', fontSize: 20 }}>
               🛒
               {cart.length > 0 && (
                 <div style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: 'white', fontSize: 11, fontWeight: 800, width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -737,16 +669,9 @@ function Transaction() {
                 </div>
               )}
             </button>
-
-            {/* Mobile Cart Bottom Sheet */}
             {showCart && (
               <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1500 }} onClick={() => setShowCart(false)}>
-                <div onClick={e => e.stopPropagation()} style={{
-                  position: 'absolute', bottom: 0, left: 0, right: 0,
-                  background: 'white', borderRadius: '20px 20px 0 0',
-                  padding: '20px 16px', maxHeight: '85vh', overflowY: 'auto',
-                  boxShadow: '0 -8px 32px rgba(0,0,0,0.2)'
-                }}>
+                <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'white', borderRadius: '20px 20px 0 0', padding: '20px 16px', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 -8px 32px rgba(0,0,0,0.2)' }}>
                   <div style={{ width: 40, height: 4, background: '#e2e8f0', borderRadius: 2, margin: '0 auto 16px' }} />
                   {CartPanel}
                 </div>
@@ -791,9 +716,7 @@ function Transaction() {
                         <div style={{ padding: '11px 13px' }}>
                           <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 2 }}>{item.name}</div>
                           <div style={{ fontWeight: 800, fontSize: 17, color: '#16a34a', marginBottom: 6 }}>₱{Number(item.price).toLocaleString()}</div>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: badge.bg, color: badge.color, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>
-                            📦 {badge.label}
-                          </div>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: badge.bg, color: badge.color, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>📦 {badge.label}</div>
                         </div>
                       </div>
                     )
@@ -805,13 +728,12 @@ function Transaction() {
           </div>
         )}
 
-        {/* Receipt */}
         {receipt && !receipt.voided && (
           <div className="receipt" style={{ marginTop: 26 }}>
             <h2>🏨 VS Hotel Bistro</h2>
             <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Official Receipt</p>
             <hr />
-            <p><strong>Receipt #:</strong> {receipt.id}</p>
+            <p><strong>Transaction #:</strong> TXN-{String(receipt.id).padStart(5, '0')}</p>
             <p><strong>Date:</strong> {receipt.date}</p>
             <p><strong>Table No:</strong> {receipt.tableNo}</p>
             <p><strong>Cashier:</strong> {receipt.cashier_name}</p>
@@ -834,8 +756,6 @@ function Transaction() {
             <button className="btn-primary" onClick={() => printReceipt(receipt, true)} style={{ width: '100%' }}><FaPrint size={13} /> Print Again</button>
           </div>
         )}
-
-        {/* ── MODALS ── */}
 
         {showSettingsModal && tmpSettings && (
           <div className="modal-overlay">
@@ -962,7 +882,7 @@ function Transaction() {
             <div className="modal" style={{ maxWidth: 380 }}>
               <h2><FaPrint style={{ marginRight: 8 }} />Reprint Receipt</h2>
               <div>
-                <label style={lbl}>Receipt # (Transaction ID)</label>
+                <label style={lbl}>Transaction # (ID)</label>
                 <input type="number" placeholder="e.g. 42" value={reprintTxId} onChange={e => setReprintTxId(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleReprintById()} />
               </div>
               <div className="form-actions" style={{ marginTop: 16 }}>
