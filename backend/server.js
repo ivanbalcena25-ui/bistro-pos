@@ -114,6 +114,7 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// ── MENU ──
 app.get('/api/menu', auth, async (req, res) => {
   try {
     const [rows] = await query("SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status = 'Available'")
@@ -196,9 +197,6 @@ app.post('/api/transactions', auth, async (req, res) => {
       created_by, items, shift_id
     } = req.body
 
-    // ── FIX: log incoming items para ma-verify ──
-    console.log('📦 Transaction items received:', JSON.stringify(items))
-
     const result = await client.query(
       'INSERT INTO transactions (customer_name, table_no, total, amount_paid, change_amount, discount_type, discount_amount, payment_method, cashier_name, created_by, shift_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
       [customer_name, table_no, total, amount_paid, change_amount,
@@ -209,13 +207,9 @@ app.post('/api/transactions', auth, async (req, res) => {
     const transactionId = result.rows[0].id
 
     for (const item of items) {
-      // ── FIX: explicitly use item.name as item_name ──
       const itemName = String(item.name || '').trim()
       const itemPrice = Number(item.price) || 0
       const itemQty = Number(item.qty) || 1
-
-      console.log(`  → Inserting: "${itemName}" x${itemQty} @ ₱${itemPrice}`)
-
       await client.query(
         'INSERT INTO transaction_items (transaction_id, item_name, price, qty, subtotal) VALUES ($1,$2,$3,$4,$5)',
         [transactionId, itemName, itemPrice, itemQty, itemPrice * itemQty]
@@ -352,18 +346,3 @@ app.get('/api/alerts/low-stock', auth, async (req, res) => {
 
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`✅ Bistro POS Backend running on http://localhost:${PORT}`))
-// ── MENU ── (updated - strip image from list, separate image endpoint)
-app.get('/api/menu', auth, async (req, res) => {
-  try {
-    const [rows] = await query("SELECT id, name, price, category, status, stock FROM menu_items WHERE status = 'Available'")
-    res.json(rows)
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-app.get('/api/menu/:id/image', auth, async (req, res) => {
-  try {
-    const [rows] = await query('SELECT image FROM menu_items WHERE id = $1', [req.params.id])
-    if (!rows.length) return res.status(404).json({ error: 'Not found' })
-    res.json({ image: rows[0].image })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
