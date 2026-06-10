@@ -353,3 +353,18 @@ app.get('/api/alerts/low-stock', auth, async (req, res) => {
 
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => console.log(`✅ Bistro POS Backend running on http://localhost:${PORT}`))
+// ── MENU ── (updated - strip image from list, separate image endpoint)
+app.get('/api/menu', auth, async (req, res) => {
+  try {
+    const [rows] = await query("SELECT id, name, price, category, status, stock FROM menu_items WHERE status = 'Available'")
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.get('/api/menu/:id/image', auth, async (req, res) => {
+  try {
+    const [rows] = await query('SELECT image FROM menu_items WHERE id = $1', [req.params.id])
+    if (!rows.length) return res.status(404).json({ error: 'Not found' })
+    res.json({ image: rows[0].image })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
