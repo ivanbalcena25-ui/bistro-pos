@@ -154,14 +154,13 @@ function Reports() {
     a.click()
   }
 
-  // ── PRINT RECEIPT from Reports ──
   const printReceipt = (t) => {
     const items = t.items || []
     const date = new Date(t.created_at).toLocaleString('en-PH')
     const receiptHTML = `<!DOCTYPE html>
 <html>
 <head>
-  <title>Receipt #${t.id}</title>
+  <title>Receipt TXN-${String(t.id).padStart(5, '0')}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -194,16 +193,8 @@ function Reports() {
       display: flex; gap: 10px; justify-content: center;
       box-shadow: 0 -4px 12px rgba(0,0,0,0.3);
     }
-    .btn-print {
-      padding: 10px 28px; background: #16a34a; color: white;
-      border: none; border-radius: 8px; font-size: 14px;
-      font-weight: 700; cursor: pointer;
-    }
-    .btn-close {
-      padding: 10px 28px; background: #475569; color: white;
-      border: none; border-radius: 8px; font-size: 14px;
-      font-weight: 700; cursor: pointer;
-    }
+    .btn-print { padding: 10px 28px; background: #16a34a; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
+    .btn-close { padding: 10px 28px; background: #475569; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -212,7 +203,7 @@ function Reports() {
     <div style="font-size:10px; margin-top:2px; letter-spacing:1px;">- - OFFICIAL RECEIPT - -</div>
   </div>
   <div class="divider"></div>
-  <div class="row"><span>Transaction #:</span><span><b>${t.id}</b></span></div>
+  <div class="row"><span>Transaction #:</span><span><b>TXN-${String(t.id).padStart(5, '0')}</b></span></div>
   <div class="row"><span>Date:</span><span>${date}</span></div>
   <div class="row"><span>Table:</span><span><b>Table ${t.table_no}</b></span></div>
   <div class="row"><span>Cashier:</span><span>${t.cashier_name || '—'}</span></div>
@@ -303,7 +294,6 @@ function Reports() {
           </div>
         )}
 
-        {/* Stats */}
         <div className="stats-grid" style={{ marginBottom: 16 }}>
           {statCards.map((s, i) => (
             <div key={i} className="stat-card" style={{ borderTop: `3px solid ${s.color}` }}>
@@ -313,7 +303,6 @@ function Reports() {
           ))}
         </div>
 
-        {/* Voided alert */}
         {stats.voidedCount > 0 && (
           <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: '12px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 20 }}>🚫</span>
@@ -324,7 +313,6 @@ function Reports() {
           </div>
         )}
 
-        {/* Filters Row */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           {filters.map(({ val, label }) => (
             <button key={val} onClick={() => { setFilter(val); if (val !== 'custom') { setStartDate(''); setEndDate('') } }} style={{ padding: '8px 18px', borderRadius: 20, fontSize: 14, fontWeight: 600, border: `1.5px solid ${filter === val ? '#16a34a' : '#e2e8f0'}`, background: filter === val ? '#16a34a' : 'white', color: filter === val ? 'white' : '#64748b', cursor: 'pointer', transition: 'all 0.15s' }}>
@@ -336,7 +324,6 @@ function Reports() {
           </button>
         </div>
 
-        {/* Per-Cashier Filter */}
         {allCashiers.length > 2 && (
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <FaUser style={{ color: '#94a3b8', flexShrink: 0 }} />
@@ -395,9 +382,9 @@ function Reports() {
 
                   return (
                     <tr key={t.id} style={{ background: isVoided ? '#fff5f5' : 'inherit' }}>
+
                       <td style={{ color: '#94a3b8', fontWeight: 700, fontSize: 14 }}>{i + 1}</td>
 
-                      {/* Transaction # */}
                       <td>
                         <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700, border: '1px solid #bbf7d0' }}>
                           TXN-{String(t.id).padStart(5, '0')}
@@ -406,7 +393,6 @@ function Reports() {
 
                       <td style={{ fontSize: 13, color: '#475569' }}>{new Date(t.created_at).toLocaleString()}</td>
 
-                      {/* Table # */}
                       <td>
                         <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700, border: '1px solid #bbf7d0' }}>
                           Table {t.table_no}
@@ -425,7 +411,6 @@ function Reports() {
                         </span>
                       </td>
 
-                      {/* Items Ordered */}
                       <td style={{ maxWidth: 220 }}>
                         {items.length === 0 ? (
                           <span style={{ color: '#cbd5e1', fontSize: 13 }}>—</span>
@@ -451,7 +436,6 @@ function Reports() {
                         )}
                       </td>
 
-                      {/* Total / Status */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                           <span style={{ fontWeight: 800, color: isVoided ? '#94a3b8' : '#16a34a', fontSize: 15, textDecoration: isVoided ? 'line-through' : 'none' }}>
@@ -467,7 +451,6 @@ function Reports() {
                         </div>
                       </td>
 
-                      {/* Print Receipt Button */}
                       <td>
                         <button
                           onClick={() => printReceipt(t)}
@@ -486,6 +469,7 @@ function Reports() {
                           <FaPrint size={11} /> {isVoided ? 'Voided' : 'Print'}
                         </button>
                       </td>
+
                     </tr>
                   )
                 })}
