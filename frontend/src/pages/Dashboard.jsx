@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
-import { FaMoneyBillWave, FaShoppingCart, FaUsers, FaCoffee, FaSyncAlt, FaReceipt, FaChartLine, FaCrown } from 'react-icons/fa'
+import { FaMoneyBillWave, FaShoppingCart, FaUsers, FaCoffee, FaSyncAlt } from 'react-icons/fa'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { getTransactions } from '../api'
 
@@ -12,7 +12,6 @@ function Dashboard() {
   const [chartData, setChartData] = useState([])
   const [greeting, setGreeting] = useState('')
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768)
@@ -21,7 +20,6 @@ function Dashboard() {
   }, [])
 
   const loadData = async () => {
-    setLoading(true)
     const h = new Date().getHours()
     setGreeting(h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening')
     try {
@@ -45,295 +43,207 @@ function Dashboard() {
       const days = []
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i)
-        const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
         const dayTx = all.filter(t => new Date(t.created_at).toDateString() === d.toDateString() && !t.voided)
         days.push({ day: label, sales: dayTx.reduce((s, t) => s + Number(t.total), 0), orders: dayTx.length })
       }
       setChartData(days)
     } catch { console.error('Failed to load dashboard data!') }
-    finally { setLoading(false) }
   }
 
-  useEffect(() => { loadData(); const id = setInterval(loadData, 30000); return () => clearInterval(id) }, [])
+  useEffect(() => { loadData(); const id = setInterval(loadData, 10000); return () => clearInterval(id) }, [])
 
   const cards = [
-    { icon: <FaMoneyBillWave />, label: "Today's Sales", value: `₱${stats.sales.toLocaleString()}`, color: '#10b981', bg: '#ecfdf5', trend: '+12%' },
-    { icon: <FaShoppingCart />, label: 'Orders', value: stats.orders, color: '#3b82f6', bg: '#eff6ff', trend: '+8%' },
-    { icon: <FaUsers />, label: 'Customers', value: stats.customers, color: '#f59e0b', bg: '#fffbeb', trend: '+5%' },
-    { icon: <FaCoffee />, label: 'Items Sold', value: stats.items, color: '#ef4444', bg: '#fef2f2', trend: '+15%' },
+    { icon: <FaMoneyBillWave />, label: "Today's Sales", value: `₱${stats.sales.toLocaleString()}`, color: '#16a34a', bg: '#f0fdf4' },
+    { icon: <FaShoppingCart />, label: 'Orders Today', value: stats.orders, color: '#0d9488', bg: '#f0fdfa' },
+    { icon: <FaUsers />, label: 'Customers Today', value: stats.customers, color: '#d97706', bg: '#fffbeb' },
+    { icon: <FaCoffee />, label: 'Items Sold', value: stats.items, color: '#dc2626', bg: '#fef2f2' },
   ]
+  const barColors = ['#16a34a', '#22c55e', '#4ade80', '#86efac', '#bbf7d0']
 
   return (
-    <div style={{ background: '#f8fafc', minHeight: '100vh' }}>
+    <div className="page-container">
       <Navbar />
-      <div style={{ maxWidth: 1400, margin: '0 auto', padding: isMobile ? '16px' : '24px' }}>
-        
-        {/* HERO SECTION */}
+      <div className="page-content">
+
+        {/* HEADER */}
         <div style={{
-          background: 'linear-gradient(135deg, #0f2b1d 0%, #1a4a2a 50%, #0f2b1d 100%)',
-          borderRadius: 28,
-          padding: isMobile ? '24px 20px' : '32px 40px',
-          marginBottom: 28,
-          position: 'relative',
-          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          justifyContent: 'space-between',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          marginBottom: 20,
+          padding: isMobile ? '16px' : '22px 24px',
+          background: 'linear-gradient(135deg, #14532d 0%, #166534 50%, #15803d 100%)',
+          borderRadius: 16,
+          boxShadow: '0 6px 20px rgba(22,163,74,0.28)',
+          gap: 12,
         }}>
-          <div style={{ position: 'absolute', top: -50, right: -50, opacity: 0.05 }}>
-            <FaChartLine size={200} color="white" />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: 16 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <span style={{ fontSize: 40 }}>🏨</span>
-                <div>
-                  <div style={{ color: '#86efac', fontSize: 11, fontWeight: 600, letterSpacing: 3 }}>VS HOTEL</div>
-                  <div style={{ color: 'white', fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>BISTRO</div>
-                </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span style={{ fontSize: isMobile ? 22 : 26 }}>🏨</span>
+              <div>
+                <div style={{ color: 'white', fontSize: 10, fontWeight: 700, letterSpacing: '2px', opacity: 0.7 }}>VS HOTEL</div>
+                <div style={{ color: '#4ade80', fontSize: 12, fontWeight: 800, letterSpacing: '3px' }}>BISTRO</div>
               </div>
-              <h1 style={{ color: 'white', fontSize: isMobile ? 20 : 28, fontWeight: 700, margin: 0 }}>
-                {greeting}, {user.username || 'Admin'}! 👋
-              </h1>
-              <p style={{ color: '#bbf7d0', fontSize: 13, marginTop: 6, opacity: 0.8 }}>
-                Welcome back! Here's what's happening with your bistro today.
-              </p>
             </div>
-            <button
-              onClick={loadData}
-              disabled={loading}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '10px 20px',
-                background: 'rgba(255,255,255,0.12)',
-                color: 'white', border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: 40, cursor: 'pointer', fontSize: 13, fontWeight: 500,
-                backdropFilter: 'blur(10px)',
-              }}
-            >
-              <FaSyncAlt size={12} className={loading ? 'spin' : ''} /> {loading ? 'Loading...' : 'Refresh Data'}
-            </button>
+            <h1 style={{ color: 'white', fontSize: isMobile ? 18 : 22, fontWeight: 800, margin: 0 }}>
+              {greeting}, {user.username}! 👋
+            </h1>
+            <p style={{ color: 'rgba(255,255,255,0.60)', fontSize: isMobile ? 12 : 13, marginTop: 4 }}>
+              Here's your bistro overview for today.
+            </p>
           </div>
+          <button
+            onClick={loadData}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '9px 16px',
+              width: isMobile ? '100%' : 'auto',
+              background: 'rgba(255,255,255,0.13)',
+              color: 'white', border: '1.5px solid rgba(255,255,255,0.22)',
+              borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.22)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.13)'}
+          >
+            <FaSyncAlt size={12} /> Refresh
+          </button>
         </div>
 
-        {/* STATS CARDS */}
+        {/* STAT CARDS */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-          gap: 16,
-          marginBottom: 28,
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: isMobile ? 10 : 16,
+          marginBottom: 20,
         }}>
-          {cards.map((card, i) => (
+          {cards.map((s, i) => (
             <div key={i} style={{
-              background: 'white',
-              borderRadius: 20,
-              padding: isMobile ? '16px' : '20px',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-              border: '1px solid #e2e8f0',
-              transition: 'transform 0.2s, box-shadow 0.2s',
-              cursor: 'pointer',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 12px 24px -8px rgba(0,0,0,0.1)' }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{
-                  width: 44, height: 44,
-                  borderRadius: 14,
-                  background: card.bg,
-                  color: card.color,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 20,
-                }}>
-                  {card.icon}
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#10b981', background: '#ecfdf5', padding: '2px 8px', borderRadius: 20 }}>
-                  {card.trend}
-                </span>
+              background: 'white', borderRadius: 14,
+              padding: isMobile ? '14px 12px' : '20px 22px',
+              display: 'flex', alignItems: 'center',
+              gap: isMobile ? 10 : 16,
+              boxShadow: '0 1px 4px rgba(22,163,74,0.08)',
+              border: '1px solid #d1fae5',
+              borderTop: `3px solid ${s.color}`,
+            }}>
+              <div style={{
+                width: isMobile ? 40 : 52, height: isMobile ? 40 : 52,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: isMobile ? 10 : 14, flexShrink: 0,
+                fontSize: isMobile ? 17 : 22,
+                background: s.bg, color: s.color,
+              }}>{s.icon}</div>
+              <div>
+                <h3 style={{ fontSize: isMobile ? 18 : 24, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{s.value}</h3>
+                <p style={{ color: '#475569', fontSize: isMobile ? 11 : 13, marginTop: 4, fontWeight: 500 }}>{s.label}</p>
               </div>
-              <h3 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                {card.value}
-              </h3>
-              <p style={{ color: '#64748b', fontSize: 12, marginTop: 6, fontWeight: 500 }}>
-                {card.label}
-              </p>
             </div>
           ))}
         </div>
 
-        {/* CHARTS SECTION */}
+        {/* CHARTS */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-          gap: 20,
-          marginBottom: 28,
+          gap: 16, marginBottom: 16,
         }}>
-          <div style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: isMobile ? '16px' : '20px',
-            border: '1px solid #e2e8f0',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>📈 Sales Trend (Last 7 Days)</h2>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>vs previous week</span>
-            </div>
-            <ResponsiveContainer width="100%" height={isMobile ? 200 : 260}>
+          <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
+            <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>📈 Sales — Last 7 Days</h2>
+            <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="day" tick={{ fontSize: isMobile ? 9 : 10, fill: '#64748b' }} angle={isMobile ? -15 : 0} textAnchor="end" height={isMobile ? 50 : 30} />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={isMobile ? 55 : 65} tickFormatter={(v) => `₱${v/1000}k`} />
-                <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, 'Sales']} contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                <Line type="monotone" dataKey="sales" stroke="#10b981" strokeWidth={3} dot={{ fill: '#10b981', r: 4 }} activeDot={{ r: 6 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
+                <XAxis dataKey="day" tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} />
+                <YAxis tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} width={isMobile ? 50 : 65} />
+                <Tooltip formatter={(v) => [`₱${v.toLocaleString()}`, 'Sales']} contentStyle={{ borderRadius: 10, border: '1px solid #bbf7d0', fontSize: 12 }} />
+                <Line type="monotone" dataKey="sales" stroke="#16a34a" strokeWidth={2.5} dot={{ fill: '#16a34a', r: 3 }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-
-          <div style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: isMobile ? '16px' : '20px',
-            border: '1px solid #e2e8f0',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0 }}>📊 Orders Overview (Last 7 Days)</h2>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>daily count</span>
-            </div>
-            <ResponsiveContainer width="100%" height={isMobile ? 200 : 260}>
+          <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
+            <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>📊 Orders — Last 7 Days</h2>
+            <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="day" tick={{ fontSize: isMobile ? 9 : 10, fill: '#64748b' }} angle={isMobile ? -15 : 0} textAnchor="end" height={isMobile ? 50 : 30} />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} width={30} />
-                <Tooltip formatter={(v) => [v, 'Orders']} contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                <Bar dataKey="orders" fill="#10b981" radius={[8, 8, 0, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
+                <XAxis dataKey="day" tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} />
+                <YAxis tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} width={30} />
+                <Tooltip formatter={(v) => [v, 'Orders']} contentStyle={{ borderRadius: 10, border: '1px solid #bbf7d0', fontSize: 12 }} />
+                <Bar dataKey="orders" fill="#16a34a" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* BOTTOM SECTION */}
+        {/* BOTTOM PANELS */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 0.8fr',
-          gap: 20,
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+          gap: 16,
         }}>
           {/* Recent Transactions */}
-          <div style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: isMobile ? '16px' : '20px',
-            border: '1px solid #e2e8f0',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FaReceipt size={14} color="#10b981" /> Recent Transactions
-              </h2>
-              <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>Last 5 orders</span>
-            </div>
+          <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
+            <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>🧾 Recent Transactions</h2>
             {recent.length === 0 ? (
               <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🧾</div>
-                <p style={{ fontWeight: 500 }}>No transactions yet today</p>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>🧾</div>
+                <p style={{ fontWeight: 600, fontSize: 14 }}>No transactions yet</p>
               </div>
-            ) : (
-              recent.map((t, i) => (
-                <div key={i} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '14px 0',
-                  borderBottom: i < recent.length - 1 ? '1px solid #f1f5f9' : 'none',
-                }}>
-                  <div>
-                    <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 4 }}>
-                      Table {t.table_no} - {t.customer_name}
-                    </div>
-                    <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#94a3b8' }}>
-                      <span>{t.payment_method || 'Cash'}</span>
-                      <span>•</span>
-                      <span>{new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
+            ) : recent.map((t, i) => (
+              <div key={i} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '10px 0', borderBottom: i < recent.length - 1 ? '1px solid #f0fdf4' : 'none', gap: 8,
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 14, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    👤 {t.customer_name}
                   </div>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: '#10b981' }}>
-                    ₱{Number(t.total).toLocaleString()}
+                  <div style={{ fontSize: isMobile ? 11 : 12, color: '#64748b', marginTop: 2 }}>
+                    Table {t.table_no} · {t.payment_method || 'Cash'}
                   </div>
                 </div>
-              ))
-            )}
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontWeight: 700, color: '#16a34a', fontSize: isMobile ? 13 : 15 }}>
+                    ₱{Number(t.total).toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                    {new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Top Selling Items */}
-          <div style={{
-            background: 'white',
-            borderRadius: 20,
-            padding: isMobile ? '16px' : '20px',
-            border: '1px solid #e2e8f0',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <FaCrown size={14} color="#f59e0b" /> Top Selling Items
-              </h2>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>by quantity</span>
-            </div>
+          <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
+            <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>🏆 Top Selling Items</h2>
             {topItems.length === 0 ? (
               <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>🍽️</div>
-                <p style={{ fontWeight: 500 }}>No items sold yet</p>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>🍽️</div>
+                <p style={{ fontWeight: 600, fontSize: 14 }}>No data yet</p>
               </div>
-            ) : (
-              topItems.map(([name, qty], i) => {
-                const maxQty = topItems[0][1]
-                const percentage = (qty / maxQty) * 100
-                const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6']
-                return (
-                  <div key={i} style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{
-                          width: 24, height: 24, borderRadius: 12,
-                          background: colors[i % colors.length] + '20',
-                          color: colors[i % colors.length],
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 12, fontWeight: 700,
-                        }}>{i + 1}</span>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>{name}</span>
-                      </div>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>{qty} sold</span>
-                    </div>
-                    <div style={{ height: 8, background: '#f1f5f9', borderRadius: 10, overflow: 'hidden' }}>
-                      <div style={{
-                        width: `${percentage}%`,
-                        height: '100%',
-                        background: `linear-gradient(90deg, ${colors[i % colors.length]}, ${colors[i % colors.length]}aa)`,
-                        borderRadius: 10,
-                        transition: 'width 0.5s ease',
-                      }} />
-                    </div>
+            ) : topItems.map(([name, qty], i) => {
+              const pct = Math.round((qty / topItems[0][1]) * 100)
+              return (
+                <div key={i} style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontWeight: 600, fontSize: isMobile ? 12 : 13, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                      {i + 1}. {name}
+                    </span>
+                    <span style={{ fontWeight: 700, color: barColors[i], fontSize: 12, flexShrink: 0 }}>
+                      {qty} sold
+                    </span>
                   </div>
-                )
-              })
-            )}
+                  <div style={{ height: 7, background: '#f0fdf4', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: barColors[i], borderRadius: 10, transition: 'width 0.5s' }} />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
 
-        {/* FOOTER */}
-        <div style={{
-          marginTop: 32,
-          padding: '20px 0',
-          textAlign: 'center',
-          borderTop: '1px solid #e2e8f0',
-          color: '#94a3b8',
-          fontSize: 11,
-        }}>
-          <p>VS Hotel Bistro POS System — Secured with Row Level Security</p>
-        </div>
-
       </div>
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .spin {
-          animation: spin 1s linear infinite;
-        }
-      `}</style>
     </div>
   )
 }
