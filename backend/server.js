@@ -123,7 +123,7 @@ app.get('/api/menu', auth, async (req, res) => {
   try {
     // ✅ FIX: Include items where status IS NULL (newly added items) + Available ones
     const [rows] = await query(
-      "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status IS NULL OR status != 'Unavailable' ORDER BY category, name ASC"
+      "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status = 'Available' OR status IS NULL ORDER BY category, name ASC"
     )
     // ✅ Normalize: always return status as 'Available' if null
     const normalized = rows.map(r => ({ ...r, status: r.status || 'Available' }))

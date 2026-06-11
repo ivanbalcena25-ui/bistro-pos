@@ -93,7 +93,7 @@ function Transaction() {
     setLoadingMenu(true)
     try {
       const d = await getMenu()
-      setAvailableItems(Array.isArray(d) ? d.filter(i => !i.status || i.status === 'Available') : [])
+      setAvailableItems(Array.isArray(d) ? d : [])
     } catch (e) { setError('Failed to load menu: ' + e.message) }
     setLoadingMenu(false)
   }, [])
