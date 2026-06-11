@@ -77,6 +77,7 @@ function Reports() {
   const [cashierFilter, setCashierFilter] = useState('All')
   const [expandedRows, setExpandedRows] = useState(new Set())
 
+  // ✅ Tanggal na ang setInterval — manual refresh na lang
   const loadData = async () => {
     setLoading(true)
     setError('')
@@ -89,11 +90,7 @@ function Reports() {
     setLoading(false)
   }
 
-  useEffect(() => {
-    loadData()
-    const interval = setInterval(loadData, 10000)
-    return () => clearInterval(interval)
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   const toggleRow = (id) => {
     setExpandedRows(prev => {
@@ -264,7 +261,9 @@ function Reports() {
         <div className="page-header">
           <div><h1>Reports</h1></div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn-primary" onClick={loadData} style={{ background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0' }}>🔄 Refresh</button>
+            <button className="btn-primary" onClick={loadData} style={{ background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', boxShadow: 'none' }}>
+              🔄 Refresh
+            </button>
             <button className="btn-primary" onClick={handleExport}><FaDownload size={13} /> Export CSV</button>
           </div>
         </div>
@@ -364,36 +363,28 @@ function Reports() {
 
                   return (
                     <tr key={t.id} style={{ background: isVoided ? '#fff5f5' : 'inherit' }}>
-
                       <td style={{ color: '#94a3b8', fontWeight: 700, fontSize: 14 }}>{i + 1}</td>
-
                       <td>
                         <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '3px 10px', borderRadius: 12, fontSize: 12, fontWeight: 700, border: '1px solid #bbf7d0' }}>
                           TXN-{String(t.id).padStart(5, '0')}
                         </span>
                       </td>
-
                       <td style={{ fontSize: 13, color: '#475569' }}>{new Date(t.created_at).toLocaleString()}</td>
-
                       <td>
                         <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700, border: '1px solid #bbf7d0' }}>
                           Table {t.table_no}
                         </span>
                       </td>
-
                       <td>
                         {t.cashier_name
                           ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#f0fdf4', color: '#16a34a', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 600, border: '1px solid #bbf7d0' }}>🧑‍💼 {t.cashier_name}</span>
                           : <span style={{ color: '#cbd5e1', fontSize: 14 }}>—</span>}
                       </td>
-
                       <td>
                         <span style={{ background: '#f8fafc', color: '#475569', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 500, border: '1px solid #e2e8f0' }}>
                           {t.payment_method || 'Cash'}
                         </span>
                       </td>
-
-                      {/* Ordered — item names + qty */}
                       <td style={{ maxWidth: 240 }}>
                         {items.length === 0 ? (
                           <span style={{ color: '#cbd5e1', fontSize: 13 }}>—</span>
@@ -403,25 +394,18 @@ function Reports() {
                               <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <span style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '3px 10px', fontSize: 12, color: '#166534', fontWeight: 600, whiteSpace: 'nowrap' }}>
                                   {item.item_name || item.name}
-                                  <span style={{ background: '#16a34a', color: 'white', borderRadius: 20, padding: '1px 6px', fontSize: 11, fontWeight: 700, marginLeft: 6 }}>
-                                    x{item.qty}
-                                  </span>
+                                  <span style={{ background: '#16a34a', color: 'white', borderRadius: 20, padding: '1px 6px', fontSize: 11, fontWeight: 700, marginLeft: 6 }}>x{item.qty}</span>
                                 </span>
                               </div>
                             ))}
                             {items.length > 2 && (
-                              <button
-                                onClick={() => toggleRow(t.id)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', fontSize: 11, fontWeight: 700, textAlign: 'left', padding: '1px 0' }}
-                              >
+                              <button onClick={() => toggleRow(t.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', fontSize: 11, fontWeight: 700, textAlign: 'left', padding: '1px 0' }}>
                                 {isExpanded ? '▲ Show less' : `▼ +${items.length - 2} more`}
                               </button>
                             )}
                           </div>
                         )}
                       </td>
-
-                      {/* Total */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                           <span style={{ fontWeight: 800, color: isVoided ? '#94a3b8' : '#16a34a', fontSize: 15, textDecoration: isVoided ? 'line-through' : 'none' }}>
@@ -436,27 +420,14 @@ function Reports() {
                           )}
                         </div>
                       </td>
-
-                      {/* Receipt */}
                       <td>
-                        <button
-                          onClick={() => printReceipt(t)}
-                          title="Print Receipt"
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                            padding: '6px 12px', borderRadius: 8, border: 'none',
-                            background: isVoided ? '#f1f5f9' : '#f0fdf4',
-                            color: isVoided ? '#94a3b8' : '#16a34a',
-                            cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                            transition: 'all 0.15s'
-                          }}
+                        <button onClick={() => printReceipt(t)} title="Print Receipt" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: 'none', background: isVoided ? '#f1f5f9' : '#f0fdf4', color: isVoided ? '#94a3b8' : '#16a34a', cursor: 'pointer', fontSize: 12, fontWeight: 700, transition: 'all 0.15s' }}
                           onMouseEnter={e => { if (!isVoided) e.currentTarget.style.background = '#dcfce7' }}
                           onMouseLeave={e => { e.currentTarget.style.background = isVoided ? '#f1f5f9' : '#f0fdf4' }}
                         >
                           <FaPrint size={11} /> {isVoided ? 'Voided' : 'Print'}
                         </button>
                       </td>
-
                     </tr>
                   )
                 })}
