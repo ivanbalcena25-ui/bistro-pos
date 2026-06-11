@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Navbar from '../components/Navbar'
 import { FaPrint, FaTimes, FaFileAlt, FaQrcode, FaCog, FaPlus, FaTrash } from 'react-icons/fa'
 import * as XLSX from 'xlsx'
@@ -28,6 +28,7 @@ const loadSettings = () => {
   }
 }
 const saveSettings = (s) => localStorage.setItem('pos_settings', JSON.stringify(s))
+
 const formatCashInput = (raw) => {
   if (raw === '') return ''
   const parts = raw.split('.')
@@ -82,69 +83,105 @@ function Transaction() {
   const [showReprintModal, setShowReprintModal] = useState(false)
   const [reprintTxId, setReprintTxId] = useState('')
 
+  // Cache shift in ref para hindi paulit-ulit mag-fetch
+  const activeShiftRef = useRef(null)
+
   const qrRefGCash = useRef(); const qrRefMaya = useRef()
   const qrRefShopeePay = useRef(); const qrRefGrabPay = useRef()
   const qrInputRefs = { GCash: qrRefGCash, Maya: qrRefMaya, ShopeePay: qrRefShopeePay, GrabPay: qrRefGrabPay }
 
-  useEffect(() => {
-    loadMenu(); loadTables(); loadTransactions(); loadActiveShift(); loadAlerts()
-    const interval = setInterval(() => { loadTables(); loadAlerts(); loadActiveShift() }, 5000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const loadMenu = async () => {
+  // ── LOAD FUNCTIONS ──
+  const loadMenu = useCallback(async () => {
     setLoadingMenu(true)
     try {
       const d = await getMenu()
       setAvailableItems(Array.isArray(d) ? d.filter(i => i.status === 'Available') : [])
-    }
-    catch (e) { setError('Failed to load menu: ' + e.message) }
+    } catch (e) { setError('Failed to load menu: ' + e.message) }
     setLoadingMenu(false)
-  }
-  const loadTables = async () => { try { const d = await getTables(); setTables(Array.isArray(d) ? d : []) } catch {} }
-  const loadTransactions = async () => { try { const d = await getTransactions(); setAllTransactions(Array.isArray(d) ? d : []) } catch {} }
-  const loadActiveShift = async () => { try { const s = await getActiveShift(); setActiveShift(s) } catch {} }
-  const loadAlerts = async () => { try { const a = await getLowStockAlerts(10); setLowStockAlerts(a) } catch {} }
+  }, [])
 
-  const getDiscountMap = () => { const map = {}; settings.discounts.forEach(d => { map[d.label] = d.rate / 100 }); return map }
-  const getTableStatus = (num) => { const t = tables.find(t => t.number === num); return t ? t.status : 'Available' }
+  // Silent load — hindi nag-reset ng loading state, para sa polling
+  const loadTablesSilent = useCallback(async () => {
+    try { const d = await getTables(); setTables(Array.isArray(d) ? d : []) } catch {}
+  }, [])
+
+  const loadTransactions = useCallback(async () => {
+    try { const d = await getTransactions(); setAllTransactions(Array.isArray(d) ? d : []) } catch {}
+  }, [])
+
+  const loadActiveShift = useCallback(async () => {
+    try {
+      const s = await getActiveShift()
+      setActiveShift(s)
+      activeShiftRef.current = s
+    } catch {}
+  }, [])
+
+  const loadAlertsSilent = useCallback(async () => {
+    try { const a = await getLowStockAlerts(10); setLowStockAlerts(a) } catch {}
+  }, [])
+
+  // ── INITIAL LOAD — parallel fetch ──
+  useEffect(() => {
+    Promise.all([loadMenu(), loadTablesSilent(), loadTransactions(), loadActiveShift(), loadAlertsSilent()])
+
+    // Poll tables + alerts every 8s (hindi na 5s — less requests)
+    const interval = setInterval(() => {
+      loadTablesSilent()
+      loadAlertsSilent()
+    }, 8000)
+
+    // Poll shift every 30s lang (hindi nagbabago madalas)
+    const shiftInterval = setInterval(() => {
+      loadActiveShift()
+    }, 30000)
+
+    return () => { clearInterval(interval); clearInterval(shiftInterval) }
+  }, [])
+
+  const getDiscountMap = () => {
+    const map = {}
+    settings.discounts.forEach(d => { map[d.label] = d.rate / 100 })
+    return map
+  }
+
+  const getTableStatus = useCallback((num) => {
+    const t = tables.find(t => t.number === num)
+    return t ? t.status : 'Available'
+  }, [tables])
 
   const handleTableChange = (e) => {
-    const val = e.target.value; setTableNo(val); setTableError('')
+    const val = e.target.value
+    setTableNo(val)
+    setTableError('')
     if (val) {
       const num = parseInt(val)
-      if (num < 1 || num > TOTAL_TABLES) { setTableError(`Table must be between 1 and ${TOTAL_TABLES}.`); return }
+      if (num < 1 || num > TOTAL_TABLES) { setTableError(`Table must be 1–${TOTAL_TABLES}.`); return }
       if (getTableStatus(num) === 'Occupied') setTableError(`Table ${num} is occupied!`)
     }
   }
 
-  const addToCart = async (item) => {
-    let currentShift = activeShift
-    try { currentShift = await getActiveShift(); setActiveShift(currentShift) } catch {}
+  const addToCart = useCallback(async (item) => {
+    // Use cached shift — walang extra API call
+    const currentShift = activeShiftRef.current
     if (!currentShift) { alert('No active shift! Please open a shift first.'); return }
     if (item.status !== 'Available' || (item.stock ?? 0) === 0) return
+
     setCart(prev => {
       const exists = prev.find(c => c.id === item.id)
       const currentQty = exists ? exists.qty : 0
       if (currentQty >= (item.stock ?? 999)) { alert(`Only ${item.stock} left in stock!`); return prev }
       if (exists) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-      // ── strip image from cart to keep state light, keep imageUrl separate ──
       return [...prev, {
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        category: item.category,
-        stock: item.stock,
-        status: item.status,
-        imageUrl: item.image || null,
-        qty: 1,
-        discount: 'None'
+        id: item.id, name: item.name, price: item.price,
+        category: item.category, stock: item.stock, status: item.status,
+        imageUrl: item.image || null, qty: 1, discount: 'None'
       }]
     })
     if (isMobile) setShowCart(true)
-  }
+  }, [isMobile])
 
-  const updateQty = (id, delta) => {
+  const updateQty = useCallback((id, delta) => {
     setCart(prev => prev.map(c => {
       if (c.id !== id) return c
       const newQty = c.qty + delta
@@ -152,10 +189,16 @@ function Transaction() {
       if (newQty > (c.stock ?? 999)) { alert(`Only ${c.stock} left in stock!`); return c }
       return { ...c, qty: newQty }
     }))
-  }
+  }, [])
 
-  const updateItemDiscount = (id, discount) => setCart(prev => prev.map(c => c.id === id ? { ...c, discount } : c))
-  const removeFromCart = (id) => setCart(prev => prev.filter(c => c.id !== id))
+  const updateItemDiscount = useCallback((id, discount) => {
+    setCart(prev => prev.map(c => c.id === id ? { ...c, discount } : c))
+  }, [])
+
+  const removeFromCart = useCallback((id) => {
+    setCart(prev => prev.filter(c => c.id !== id))
+  }, [])
+
   const getItemSubtotal = (item) => item.price * item.qty
   const getItemDiscountAmt = (item) => { const map = getDiscountMap(); return getItemSubtotal(item) * (map[item.discount || 'None'] || 0) }
   const getItemTotal = (item) => getItemSubtotal(item) - getItemDiscountAmt(item)
@@ -182,37 +225,51 @@ function Transaction() {
 
   const handleCheckout = async () => {
     setError('')
-    let currentShift = activeShift
-    try { currentShift = await getActiveShift(); setActiveShift(currentShift) } catch {}
+    // Use cached shift ref — no extra API call
+    const currentShift = activeShiftRef.current
     if (!currentShift) { alert('No active shift!'); return }
     if (!tableNo.trim()) return alert('Please enter table number!')
     const num = parseInt(tableNo)
-    if (num < 1 || num > TOTAL_TABLES) return alert(`Table must be between 1 and ${TOTAL_TABLES}.`)
+    if (num < 1 || num > TOTAL_TABLES) return alert(`Table must be 1–${TOTAL_TABLES}.`)
     if (getTableStatus(num) === 'Occupied') return alert(`Table ${num} is occupied!`)
     if (cart.length === 0) return alert('Please add at least one item!')
     if (paymentMethod === 'Cash' && !amountPaid) return alert('Please enter amount paid!')
     if (paymentMethod === 'Cash' && parseFloat(amountPaid) < getTotal()) return alert('Insufficient payment!')
+
     setLoadingCheckout(true)
     const total = getTotal()
     const paid = paymentMethod === 'Cash' ? parseFloat(amountPaid) : total
     const change = paymentMethod === 'Cash' ? getChange() : 0
+
     try {
-      const result = await addTransaction({
-        customer_name: `Table ${num}`, table_no: num, total, amount_paid: paid, change_amount: change,
-        discount_type: 'None', discount_amount: 0, vat_amount: getVatAmount(), payment_method: paymentMethod,
-        cashier_name: user.username || 'Cashier', created_by: user.username || 'Cashier',
-        shift_id: currentShift?.id || null,
-        // ── send only id, name, price, qty — no image ──
-        items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
-      })
-      setLastTxId(result.id); setLastTableNo(num)
-      try {
-        await addKitchenOrder({
+      // Fire transaction + kitchen order + table update in parallel
+      const [result] = await Promise.all([
+        addTransaction({
+          customer_name: `Table ${num}`, table_no: num, total,
+          amount_paid: paid, change_amount: change,
+          discount_type: 'None', discount_amount: 0,
+          vat_amount: getVatAmount(), payment_method: paymentMethod,
+          cashier_name: user.username || 'Cashier',
+          created_by: user.username || 'Cashier',
+          shift_id: currentShift?.id || null,
+          items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
+        }),
+      ])
+
+      setLastTxId(result.id)
+      setLastTableNo(num)
+
+      // Kitchen + table update in background — hindi na hinihintay
+      Promise.all([
+        addKitchenOrder({
           table_no: num, cashier_name: user.username || 'Cashier',
           items: cart.map(i => ({ name: i.name, qty: i.qty }))
-        })
-      } catch {}
-      await updateTableByNumber(num, { status: 'Occupied', customer: `Table ${num}` })
+        }).catch(() => {}),
+        updateTableByNumber(num, { status: 'Occupied', customer: `Table ${num}` })
+          .then(() => loadTablesSilent()),
+        loadAlertsSilent(),
+      ])
+
       const receiptData = {
         id: result.id, tableNo,
         items: cart.map(i => ({
@@ -227,12 +284,18 @@ function Transaction() {
         cashier_name: user.username || 'Cashier',
         date: new Date().toLocaleString(), voided: false,
       }
+
       setReceipt(receiptData)
-      setCart([]); setTableNo(''); setTableError(''); setAmountPaid(''); setAmountPaidDisplay(''); setPaymentMethod('Cash')
-      await loadTables(); await loadTransactions(); await loadAlerts()
+      setCart([]); setTableNo(''); setTableError('')
+      setAmountPaid(''); setAmountPaidDisplay(''); setPaymentMethod('Cash')
       if (isMobile) setShowCart(false)
+
       if (E_WALLETS.includes(paymentMethod)) setShowQRModal(true)
       else setTimeout(() => printReceipt(receiptData, true), 300)
+
+      // Load transactions in background
+      loadTransactions()
+
     } catch (e) { setError('Failed to save transaction! ' + e.message) }
     setLoadingCheckout(false)
   }
@@ -243,9 +306,13 @@ function Transaction() {
     setLoadingVoid(true)
     try {
       await voidTransaction(lastTxId, { void_reason: voidReason, void_by: user.username || 'Cashier' })
-      if (lastTableNo) await updateTableByNumber(lastTableNo, { status: 'Available', customer: '' })
-      await loadTables(); await loadTransactions()
-      setShowVoidModal(false); setVoidReason(''); setReceipt(null); setLastTxId(null); setLastTableNo(null)
+      if (lastTableNo) {
+        await updateTableByNumber(lastTableNo, { status: 'Available', customer: '' })
+        loadTablesSilent()
+      }
+      setShowVoidModal(false); setVoidReason(''); setReceipt(null)
+      setLastTxId(null); setLastTableNo(null)
+      loadTransactions()
       alert(`Transaction voided! Table ${lastTableNo} is now free.`)
     } catch (e) { alert('Failed to void transaction! ' + e.message) }
     setLoadingVoid(false)
@@ -254,7 +321,8 @@ function Transaction() {
   const handleOpenShift = async () => {
     try {
       const result = await openShift({ opening_cash: parseFloat(openingCash) || 0 })
-      await loadActiveShift(); setShowShiftModal(false); setOpeningCash(''); setOpeningCashDisplay('')
+      await loadActiveShift()
+      setShowShiftModal(false); setOpeningCash(''); setOpeningCashDisplay('')
       alert(`Shift opened! ID: ${result.id}`)
     } catch (e) { alert('Failed to open shift: ' + e.message) }
   }
@@ -264,13 +332,15 @@ function Transaction() {
     if (!window.confirm('Close your current shift?')) return
     try {
       const result = await closeShift(activeShift.id, { closing_cash: parseFloat(closingCash) || 0 })
-      setActiveShift(null); setClosingCash(''); setClosingCashDisplay('')
+      setActiveShift(null); activeShiftRef.current = null
+      setClosingCash(''); setClosingCashDisplay('')
       alert(`Shift closed!\nTotal Sales: ₱${Number(result.totalSales).toLocaleString()}\nTransactions: ${result.txCount}`)
     } catch (e) { alert('Failed to close shift: ' + e.message) }
   }
 
   const handleReprintById = () => {
-    const id = parseInt(reprintTxId); const tx = allTransactions.find(t => t.id === id)
+    const id = parseInt(reprintTxId)
+    const tx = allTransactions.find(t => t.id === id)
     if (!tx) return alert('Transaction not found!')
     if (tx.voided) return alert('This transaction is voided.')
     const r = {
@@ -340,7 +410,7 @@ function Transaction() {
   ${r.items.map(i => `
     <div class="row">
       <span class="item-name">${i.name} x${i.qty}</span>
-      <span class="item-price">&#8369;${(i.price * i.qty).toLocaleString('en-PH', {minimumFractionDigits:2})}</span>
+      <span class="item-price">&#8369;${(i.price * i.qty).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
     </div>
     ${i.item_discount && i.item_discount !== 'None'
       ? `<div class="discount">  Disc (${i.item_discount}): -&#8369;${Number(i.item_discount_amount).toFixed(2)}</div>`
@@ -348,15 +418,15 @@ function Transaction() {
   `).join('')}
   <div class="divider"></div>
   ${r.vat_enabled ? `
-    <div class="row"><span>Subtotal</span><span>&#8369;${Number(r.subtotal).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
+    <div class="row"><span>Subtotal</span><span>&#8369;${Number(r.subtotal).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
     <div class="row"><span>VAT (${r.vat_rate}%)</span><span>&#8369;${Number(r.vat_amount).toFixed(2)}</span></div>
   ` : ''}
   <div class="double-divider"></div>
-  <div class="total-row"><span>TOTAL DUE</span><span>&#8369;${Number(r.total).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
+  <div class="total-row"><span>TOTAL DUE</span><span>&#8369;${Number(r.total).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
   <div class="double-divider"></div>
   ${r.payment_method === 'Cash' ? `
-    <div class="row"><span>Cash Tendered</span><span>&#8369;${Number(r.paid).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
-    <div class="row bold"><span>Change</span><span>&#8369;${Number(r.change).toLocaleString('en-PH', {minimumFractionDigits:2})}</span></div>
+    <div class="row"><span>Cash Tendered</span><span>&#8369;${Number(r.paid).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+    <div class="row bold"><span>Change</span><span>&#8369;${Number(r.change).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
   ` : `<div class="row center" style="justify-content:center; margin:4px 0;"><span>** Paid via <b>${r.payment_method}</b> **</span></div>`}
   <div class="divider"></div>
   <div class="center" style="margin-top:8px">
@@ -370,7 +440,7 @@ function Transaction() {
 </body>
 </html>`
     const win = window.open('', '_blank', `width=380,height=${preview ? 700 : 600},scrollbars=yes`)
-    if (!win) { alert('Pop-up blocked! Please allow pop-ups for this site.'); return }
+    if (!win) { alert('Pop-up blocked! Please allow pop-ups.'); return }
     win.document.write(receiptHTML)
     win.document.close()
     win.focus()
@@ -577,7 +647,6 @@ function Transaction() {
               <button onClick={() => setShowAlerts(true)} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#fffbeb', color: '#d97706', border: '1.5px solid #fde68a', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}>⚠️ {totalAlerts}</button>
             )}
             <button onClick={openSettingsModal} style={{ padding: isMobile ? '7px 10px' : '10px 16px', background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', borderRadius: 10, cursor: 'pointer', fontSize: isMobile ? 11 : 13, fontWeight: 600 }}><FaCog size={isMobile ? 11 : 13} /></button>
-            
             {!isMobile && <>
               <button onClick={() => setShowXReading(true)} style={{ padding: '10px 16px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><FaFileAlt size={12} /> X</button>
               <button onClick={() => setShowZReading(true)} style={{ padding: '10px 16px', background: '#1e40af', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}><FaFileAlt size={12} /> Z</button>
@@ -757,6 +826,7 @@ function Transaction() {
           </div>
         )}
 
+        {/* SETTINGS MODAL */}
         {showSettingsModal && tmpSettings && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 540, maxHeight: '85vh', overflowY: 'auto' }}>
@@ -811,6 +881,7 @@ function Transaction() {
           </div>
         )}
 
+        {/* QR MODAL */}
         {showQRModal && (
           <div className="modal-overlay">
             <div className="modal" style={{ textAlign: 'center', maxWidth: 360 }}>
@@ -825,6 +896,7 @@ function Transaction() {
           </div>
         )}
 
+        {/* VOID MODAL */}
         {showVoidModal && (
           <div className="modal-overlay">
             <div className="modal">
@@ -844,6 +916,7 @@ function Transaction() {
           </div>
         )}
 
+        {/* SHIFT MODAL */}
         {showShiftModal && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 400 }}>
@@ -877,6 +950,7 @@ function Transaction() {
           </div>
         )}
 
+        {/* REPRINT MODAL */}
         {showReprintModal && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 380 }}>
@@ -893,6 +967,7 @@ function Transaction() {
           </div>
         )}
 
+        {/* ALERTS MODAL */}
         {showAlerts && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 480 }}>
@@ -924,6 +999,7 @@ function Transaction() {
           </div>
         )}
 
+        {/* Z-READING */}
         {showZReading && (() => {
           const z = getZData()
           return (
@@ -952,6 +1028,7 @@ function Transaction() {
           )
         })()}
 
+        {/* X-READING */}
         {showXReading && (() => {
           const now = new Date(); const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0)
           const currentTx = allTransactions.filter(t => new Date(t.created_at) >= startOfDay)
