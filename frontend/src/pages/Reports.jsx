@@ -77,9 +77,7 @@ function Reports() {
   const [cashierFilter, setCashierFilter] = useState('All')
   const [expandedRows, setExpandedRows] = useState(new Set())
 
-  // ✅ Tanggal na ang setInterval — manual refresh na lang
   const loadData = async () => {
-    setLoading(true)
     setError('')
     try {
       const data = await getTransactions()
@@ -90,7 +88,12 @@ function Reports() {
     setLoading(false)
   }
 
-  useEffect(() => { loadData() }, [])
+  // ✅ Auto-refresh every 5 seconds para automatic na lalabas ang bagong transactions
+  useEffect(() => {
+    loadData()
+    const interval = setInterval(loadData, 5000)
+    return () => clearInterval(interval)
+  }, [])
 
   const toggleRow = (id) => {
     setExpandedRows(prev => {
@@ -259,7 +262,10 @@ function Reports() {
       <Navbar />
       <div className="page-content">
         <div className="page-header">
-          <div><h1>Reports</h1></div>
+          <div>
+            <h1>Reports</h1>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>🔄 Auto-refreshes every 5 seconds</p>
+          </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-primary" onClick={loadData} style={{ background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', boxShadow: 'none' }}>
               🔄 Refresh
