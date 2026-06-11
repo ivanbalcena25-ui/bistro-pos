@@ -121,10 +121,13 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
 // ── MENU ──
 app.get('/api/menu', auth, async (req, res) => {
   try {
+    // ✅ FIX: Include items where status IS NULL (newly added items) + Available ones
     const [rows] = await query(
-      "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status != 'Unavailable' ORDER BY category, name ASC"
+      "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status IS NULL OR status != 'Unavailable' ORDER BY category, name ASC"
     )
-    res.json(rows)
+    // ✅ Normalize: always return status as 'Available' if null
+    const normalized = rows.map(r => ({ ...r, status: r.status || 'Available' }))
+    res.json(normalized)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -141,14 +144,11 @@ app.post('/api/menu', auth, adminOnly, async (req, res) => {
 
 app.put('/api/menu/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { name, price, category, image, stock } = req.body
+    const { name, price, category, image, stock, status } = req.body
+    // ✅ FIX: Single query, status defaults to 'Available' if not provided
     await query(
-  'UPDATE menu_items SET name=$1, price=$2, category=$3, image=$4, stock=$5 WHERE id=$6',
-  [name, price, category, image || null, stock ?? 0, req.params.id]
-)
-    await query(
-      'UPDATE menu_items SET name=$1, price=$2, category=$3, image=$4, stock=$5, status=$6 WHERE id=$7',
-      [name, price, category, image || null, stock ?? 0, status, req.params.id]
+      'UPDATE menu_items SET name=$1, price=$2, category=$3, image=$4, stock=$5, status=$6, updated_at=NOW() WHERE id=$7',
+      [name, price, category, image || null, stock ?? 0, status || 'Available', req.params.id]
     )
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -255,7 +255,6 @@ app.post('/api/transactions', auth, async (req, res) => {
       customer_name, table_no, total, amount_paid, change_amount,
       discount_type, discount_amount, payment_method, cashier_name,
       created_by, items, shift_id
-      // ✅ REMOVED: vat_amount — wala sa transactions table
     } = req.body
 
     const result = await client.query(
@@ -304,7 +303,6 @@ app.put('/api/transactions/:id/void', auth, async (req, res) => {
     const { void_reason, void_by } = req.body
     await query(
       'UPDATE transactions SET voided=1, void_reason=$1, void_by=$2 WHERE id=$3',
-      // ✅ FIX: voided=1 (smallint) hindi voided=true (boolean)
       [void_reason || '', void_by || 'Cashier', req.params.id]
     )
     res.json({ success: true })
@@ -371,7 +369,6 @@ app.put('/api/shifts/:id/close', auth, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Shift not found' })
     const [txRows] = await query(
       'SELECT COALESCE(SUM(total),0) AS total_sales, COUNT(*) AS tx_count FROM transactions WHERE shift_id=$1 AND voided=0',
-      // ✅ FIX: voided=0 (smallint) hindi voided=false (boolean)
       [req.params.id]
     )
     const totalSales = txRows[0].total_sales || 0
@@ -457,7 +454,7 @@ app.get('/api/alerts/low-stock', auth, async (req, res) => {
       `SELECT id, name, category, stock,
         CASE WHEN stock = 0 THEN 'out' ELSE 'low' END AS alert_type
        FROM menu_items
-       WHERE stock <= $1 AND status = 'Available'
+       WHERE stock <= $1 AND (status IS NULL OR status = 'Available')
        ORDER BY stock ASC`,
       [threshold]
     )
