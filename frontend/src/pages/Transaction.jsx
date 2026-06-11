@@ -668,13 +668,6 @@ function Transaction() {
           </div>
         )}
 
-        {!activeShift && (
-          <div onClick={() => setShowShiftModal(true)} style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#ef4444', padding: '12px 18px', borderRadius: 12, marginBottom: 16, fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-            <span>🔴 No active shift. Tap to open.</span>
-            <span style={{ fontSize: 11, background: '#ef4444', color: 'white', padding: '3px 10px', borderRadius: 20 }}>Open →</span>
-          </div>
-        )}
-
         {!isMobile && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', background: 'white', padding: '12px 16px', borderRadius: 14, marginBottom: 18, boxShadow: '0 1px 4px rgba(22,163,74,0.08)', border: '1px solid #d1fae5' }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: '#16a34a', alignSelf: 'center', marginRight: 4 }}>Tables:</span>
