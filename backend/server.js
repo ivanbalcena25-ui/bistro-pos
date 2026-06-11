@@ -244,6 +244,7 @@ app.get('/api/transactions/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// ✅ FIXED: POST /api/transactions - ginamit for...of para safe ang stock deduction
 app.post('/api/transactions', auth, async (req, res) => {
   const client = await pool.connect()
   try {
@@ -253,6 +254,11 @@ app.post('/api/transactions', auth, async (req, res) => {
       discount_type, discount_amount, payment_method, cashier_name,
       created_by, items, shift_id
     } = req.body
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ error: 'No items provided' })
+    }
 
     const result = await client.query(
       `INSERT INTO transactions
@@ -270,19 +276,25 @@ app.post('/api/transactions', auth, async (req, res) => {
     )
     const transactionId = result.rows[0].id
 
-    await Promise.all(items.map(async (item) => {
+    // ✅ FIXED: for...of instead of Promise.all para guaranteed sequential at nasa loob ng transaction
+    for (const item of items) {
       const itemName = String(item.name || '').trim()
       const itemPrice = Number(item.price) || 0
       const itemQty = Number(item.qty) || 1
+      const itemId = Number(item.id)
+
       await client.query(
         'INSERT INTO transaction_items (transaction_id, item_name, price, qty, subtotal) VALUES ($1,$2,$3,$4,$5)',
         [transactionId, itemName, itemPrice, itemQty, itemPrice * itemQty]
       )
-      await client.query(
-        'UPDATE menu_items SET stock = GREATEST(stock - $1, 0) WHERE id = $2',
-        [itemQty, item.id]
-      )
-    }))
+
+      if (itemId && itemId > 0) {
+        await client.query(
+          'UPDATE menu_items SET stock = GREATEST(stock - $1, 0) WHERE id = $2',
+          [itemQty, itemId]
+        )
+      }
+    }
 
     await client.query('COMMIT')
     res.json({ id: transactionId, success: true })
@@ -416,12 +428,12 @@ app.post('/api/kitchen/orders', auth, async (req, res) => {
       [table_no, cashier_name]
     )
     const orderId = result.rows[0].id
-    await Promise.all(items.map(item =>
-      client.query(
+    for (const item of items) {
+      await client.query(
         'INSERT INTO kitchen_order_items (order_id, item_name, qty, notes) VALUES ($1,$2,$3,$4)',
         [orderId, item.name, item.qty, item.notes || '']
       )
-    ))
+    }
     await client.query('COMMIT')
     res.json({ id: orderId, success: true })
   } catch (err) {

@@ -202,6 +202,7 @@ function Transaction() {
     setClosingCash(raw); setClosingCashDisplay(formatCashInput(raw))
   }
 
+  // ✅ FIXED handleCheckout - stock at reports update agad
   const handleCheckout = async () => {
     setError('')
     const currentShift = activeShiftRef.current
@@ -219,36 +220,42 @@ function Transaction() {
     const paid = paymentMethod === 'Cash' ? parseFloat(amountPaid) : total
     const change = paymentMethod === 'Cash' ? getChange() : 0
 
+    // ✅ I-snapshot ang cart bago i-clear para sa receipt
+    const cartSnapshot = [...cart]
+
     try {
-      const [result] = await Promise.all([
-        addTransaction({
-          customer_name: `Table ${num}`, table_no: num, total,
-          amount_paid: paid, change_amount: change,
-          discount_type: 'None', discount_amount: 0,
-          vat_amount: getVatAmount(), payment_method: paymentMethod,
-          cashier_name: user.username || 'Cashier',
-          created_by: user.username || 'Cashier',
-          shift_id: currentShift?.id || null,
-          items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
-        }),
-      ])
+      const result = await addTransaction({
+        customer_name: `Table ${num}`, table_no: num, total,
+        amount_paid: paid, change_amount: change,
+        discount_type: 'None', discount_amount: 0,
+        vat_amount: getVatAmount(), payment_method: paymentMethod,
+        cashier_name: user.username || 'Cashier',
+        created_by: user.username || 'Cashier',
+        shift_id: currentShift?.id || null,
+        items: cartSnapshot.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
+      })
 
       setLastTxId(result.id)
       setLastTableNo(num)
 
+      // ✅ FIXED: I-await ang loadMenu para ma-update agad ang stock display
+      await loadMenu()
+
+      // Background tasks
       Promise.all([
         addKitchenOrder({
           table_no: num, cashier_name: user.username || 'Cashier',
-          items: cart.map(i => ({ name: i.name, qty: i.qty }))
+          items: cartSnapshot.map(i => ({ name: i.name, qty: i.qty }))
         }).catch(() => {}),
         updateTableByNumber(num, { status: 'Occupied', customer: `Table ${num}` })
           .then(() => loadTablesSilent()),
         loadAlertsSilent(),
+        loadTransactions(),
       ])
 
       const receiptData = {
         id: result.id, tableNo,
-        items: cart.map(i => ({
+        items: cartSnapshot.map(i => ({
           name: i.name, price: i.price, qty: i.qty,
           item_discount: i.discount || 'None',
           item_discount_amount: getItemDiscountAmt(i),
@@ -268,8 +275,6 @@ function Transaction() {
 
       if (E_WALLETS.includes(paymentMethod)) setShowQRModal(true)
       else setTimeout(() => printReceipt(receiptData, true), 300)
-
-      loadTransactions()
 
     } catch (e) { setError('Failed to save transaction! ' + e.message) }
     setLoadingCheckout(false)
