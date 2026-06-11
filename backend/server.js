@@ -159,10 +159,13 @@ app.delete('/api/menu/:id', auth, adminOnly, async (req, res) => {
 })
 
 // ── TABLES ──
-app.get('/api/tables', auth, async (req, res) => {
+app.get('/api/menu', auth, async (req, res) => {
   try {
-    const [rows] = await query('SELECT * FROM tables_list ORDER BY number ASC')
-    res.json(rows)
+    const [rows] = await query(
+      "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status = 'Available' OR status IS NULL ORDER BY category, name ASC"
+    )
+    const normalized = rows.map(r => ({ ...r, status: r.status || 'Available' }))
+    res.json(normalized)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

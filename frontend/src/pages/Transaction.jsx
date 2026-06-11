@@ -84,18 +84,21 @@ function Transaction() {
   const [reprintTxId, setReprintTxId] = useState('')
 
   const activeShiftRef = useRef(null)
-
   const qrRefGCash = useRef(); const qrRefMaya = useRef()
   const qrRefShopeePay = useRef(); const qrRefGrabPay = useRef()
   const qrInputRefs = { GCash: qrRefGCash, Maya: qrRefMaya, ShopeePay: qrRefShopeePay, GrabPay: qrRefGrabPay }
 
-const loadMenu = useCallback(async () => {
+  const loadMenu = useCallback(async () => {
     setLoadingMenu(true)
     try {
       const d = await getMenu()
       setAvailableItems(Array.isArray(d) ? d : [])
     } catch (e) { setError('Failed to load menu: ' + e.message) }
     setLoadingMenu(false)
+  }, [])
+
+  const loadTablesSilent = useCallback(async () => {
+    try { const d = await getTables(); setTables(Array.isArray(d) ? d : []) } catch {}
   }, [])
 
   const loadTransactions = useCallback(async () => {
@@ -146,15 +149,15 @@ const loadMenu = useCallback(async () => {
   const addToCart = useCallback(async (item) => {
     const currentShift = activeShiftRef.current
     if (!currentShift) { alert('No active shift! Please open a shift first.'); return }
-setCart(prev => {
-  const exists = prev.find(c => c.id === item.id)
-  if (exists) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-  return [...prev, {
-    id: item.id, name: item.name, price: item.price,
-    category: item.category, stock: item.stock, status: item.status,
-    imageUrl: item.image || null, qty: 1, discount: 'None'
-  }]
-})
+    setCart(prev => {
+      const exists = prev.find(c => c.id === item.id)
+      if (exists) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
+      return [...prev, {
+        id: item.id, name: item.name, price: item.price,
+        category: item.category, stock: item.stock, status: item.status,
+        imageUrl: item.image || null, qty: 1, discount: 'None'
+      }]
+    })
     if (isMobile) setShowCart(true)
   }, [isMobile])
 
@@ -786,7 +789,6 @@ setCart(prev => {
           </div>
         )}
 
-        {/* SETTINGS MODAL */}
         {showSettingsModal && tmpSettings && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 540, maxHeight: '85vh', overflowY: 'auto' }}>
@@ -841,7 +843,6 @@ setCart(prev => {
           </div>
         )}
 
-        {/* QR MODAL */}
         {showQRModal && (
           <div className="modal-overlay">
             <div className="modal" style={{ textAlign: 'center', maxWidth: 360 }}>
@@ -856,7 +857,6 @@ setCart(prev => {
           </div>
         )}
 
-        {/* VOID MODAL */}
         {showVoidModal && (
           <div className="modal-overlay">
             <div className="modal">
@@ -876,7 +876,6 @@ setCart(prev => {
           </div>
         )}
 
-        {/* SHIFT MODAL */}
         {showShiftModal && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 400 }}>
@@ -910,7 +909,6 @@ setCart(prev => {
           </div>
         )}
 
-        {/* REPRINT MODAL */}
         {showReprintModal && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 380 }}>
@@ -927,7 +925,6 @@ setCart(prev => {
           </div>
         )}
 
-        {/* ALERTS MODAL */}
         {showAlerts && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 480 }}>
@@ -959,7 +956,6 @@ setCart(prev => {
           </div>
         )}
 
-        {/* Z-READING */}
         {showZReading && (() => {
           const z = getZData()
           return (
@@ -988,7 +984,6 @@ setCart(prev => {
           )
         })()}
 
-        {/* X-READING */}
         {showXReading && (() => {
           const now = new Date(); const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0)
           const currentTx = allTransactions.filter(t => new Date(t.created_at) >= startOfDay)
