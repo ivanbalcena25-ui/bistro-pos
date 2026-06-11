@@ -150,7 +150,6 @@ function Transaction() {
   const addToCart = useCallback(async (item) => {
     const currentShift = activeShiftRef.current
     if (!currentShift) { alert('No active shift! Please open a shift first.'); return }
-    if ((item.stock ?? 0) === 0) return
 setCart(prev => {
   const exists = prev.find(c => c.id === item.id)
   if (exists) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
