@@ -93,7 +93,7 @@ function Transaction() {
     setLoadingMenu(true)
     try {
       const d = await getMenu()
-      setAvailableItems(Array.isArray(d) ? d.filter(i => i.status === 'Available') : [])
+      setAvailableItems(Array.isArray(d) ? d.filter(i => (i.stock ?? 0) > 0) : [])
     } catch (e) { setError('Failed to load menu: ' + e.message) }
     setLoadingMenu(false)
   }, [])
@@ -150,7 +150,7 @@ function Transaction() {
   const addToCart = useCallback(async (item) => {
     const currentShift = activeShiftRef.current
     if (!currentShift) { alert('No active shift! Please open a shift first.'); return }
-    if (item.status !== 'Available' || (item.stock ?? 0) === 0) return
+    if ((item.stock ?? 0) === 0) return
     setCart(prev => {
       const exists = prev.find(c => c.id === item.id)
       const currentQty = exists ? exists.qty : 0
@@ -679,7 +679,7 @@ function Transaction() {
                 </div>
               ) : filtered.map(item => {
                 const inCart = cart.find(c => c.id === item.id)
-                const oos = item.status !== 'Available' || (item.stock ?? 0) === 0
+                const oos = (item.stock ?? 0) === 0
                 const badge = getStockBadge(item)
                 return (
                   <div key={item.id} onClick={() => !oos && addToCart(item)}
