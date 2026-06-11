@@ -611,11 +611,6 @@ function Transaction() {
           <FaQrcode /> QR code will appear after checkout.
         </div>
       )}
-      {!activeShift && (
-        <div style={{ background: '#fef2f2', border: '1.5px solid #fca5a5', color: '#ef4444', padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600, textAlign: 'center' }}>
-          🔴 Open a shift first.
-        </div>
-      )}
       <button className="btn-primary btn-checkout" onClick={handleCheckout}
         disabled={!!tableError || loadingCheckout || !activeShift}
         style={{ opacity: (tableError || loadingCheckout || !activeShift) ? 0.6 : 1, cursor: !activeShift ? 'not-allowed' : 'pointer' }}>
