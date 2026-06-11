@@ -23,7 +23,7 @@ function Menu() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [saving, setSaving] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(true) // Panel is always visible
+  const [panelOpen, setPanelOpen] = useState(true)
   const fileRef = useRef()
 
   useEffect(() => { loadMenu() }, [])
@@ -66,7 +66,7 @@ function Menu() {
   }
 
   const handleAddNew = () => {
-    setSelectedItem(null) // null = add mode
+    setSelectedItem(null)
     setForm(emptyForm)
     setPreview(null)
     setError('')
@@ -83,6 +83,13 @@ function Menu() {
     setSuccess('')
   }
 
+  const resetToAddMode = () => {
+    setSelectedItem(null)
+    setForm(emptyForm)
+    setPreview(null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
   const handleSave = async () => {
     if (!form.name.trim()) return setError('Please enter item name!')
     if (!form.price || isNaN(form.price) || Number(form.price) <= 0) return setError('Please enter a valid price!')
@@ -90,7 +97,7 @@ function Menu() {
     setSaving(true)
     try {
       if (selectedItem) {
-        // EDIT existing item
+        // EDIT existing item — save then reset to Add mode
         const updated = {
           ...selectedItem,
           name: form.name.trim(),
@@ -99,13 +106,13 @@ function Menu() {
           image: form.image,
           stock: Number(form.stock) || 0
         }
-        setItems(prev => prev.map(i => i.id === selectedItem.id ? updated : i))
-        setSelectedItem(updated)
-        setSuccess('Item updated!')
         await updateMenuItem(selectedItem.id, updated)
+        setItems(prev => prev.map(i => i.id === selectedItem.id ? updated : i))
+        setSuccess('Item updated!')
+        resetToAddMode()
         setTimeout(() => setSuccess(''), 2000)
       } else {
-        // ADD new item
+        // ADD new item — save then reset form
         const payload = {
           name: form.name.trim(),
           price: Number(form.price),
@@ -116,10 +123,7 @@ function Menu() {
         const res = await addMenuItem(payload)
         setItems(prev => [...prev, res])
         setSuccess('Item added!')
-        // After adding, switch to editing the newly added item — panel stays open
-        setSelectedItem(res)
-        setForm({ name: res.name, price: String(res.price), category: res.category, image: res.image, stock: String(res.stock ?? 0) })
-        setPreview(res.image)
+        resetToAddMode()
         setTimeout(() => setSuccess(''), 2000)
       }
     } catch {
@@ -133,11 +137,8 @@ function Menu() {
     if (!selectedItem) return
     if (!window.confirm(`Delete "${selectedItem.name}"?`)) return
     setItems(prev => prev.filter(i => i.id !== selectedItem.id))
-    // After delete, reset to Add mode — panel stays open
-    setSelectedItem(null)
-    setForm(emptyForm)
-    setPreview(null)
     setSuccess('Item deleted!')
+    resetToAddMode()
     setTimeout(() => setSuccess(''), 2000)
     try {
       await deleteMenuItem(selectedItem.id)
@@ -169,7 +170,7 @@ function Menu() {
   const lowStockCount = items.filter(i => isLowStock(i)).length
   const availableCount = items.filter(i => !isOutOfStock(i)).length
   const isAddMode = panelOpen && !selectedItem
-  const isEditMode = panelOpen && selectedItem
+  const isEditMode = panelOpen && !!selectedItem
 
   return (
     <div className="page-container">
@@ -294,19 +295,16 @@ function Menu() {
             )}
           </div>
 
-          {/* RIGHT: Edit/Add Panel — stays open, user closes manually */}
+          {/* RIGHT: Edit/Add Panel */}
           {panelOpen && (
             <div style={{
               background: 'white', borderRadius: 16,
-              border: `2px solid ${isAddMode ? '#3b82f6' : '#16a34a'}`,
-              boxShadow: `0 4px 24px ${isAddMode ? 'rgba(59,130,246,0.14)' : 'rgba(22,163,74,0.14)'}`,
+              border: '2px solid #16a34a',
+              boxShadow: '0 4px 24px rgba(22,163,74,0.14)',
               position: 'sticky', top: 20, overflow: 'hidden'
             }}>
-              {/* Panel Header */}
               <div style={{
-                background: isAddMode
-                  ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
-                  : 'linear-gradient(135deg, #16a34a, #15803d)',
+                background: 'linear-gradient(135deg, #16a34a, #15803d)',
                 padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
               }}>
                 <div style={{ color: 'white', fontWeight: 700, fontSize: 15 }}>
@@ -367,7 +365,6 @@ function Menu() {
                   <input type="number" placeholder="0" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} style={{ fontSize: 14 }} />
                 </div>
 
-                {/* Stock status toggle — only when editing an existing item */}
                 {isEditMode && (() => {
                   const oos = isOutOfStock(selectedItem)
                   return (
@@ -392,21 +389,16 @@ function Menu() {
                   disabled={saving}
                   style={{
                     width: '100%', padding: '12px',
-                    background: saving
-                      ? (isAddMode ? '#93c5fd' : '#86efac')
-                      : isAddMode
-                        ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
-                        : 'linear-gradient(135deg, #16a34a, #15803d)',
+                    background: saving ? '#86efac' : 'linear-gradient(135deg, #16a34a, #15803d)',
                     color: 'white', border: 'none', borderRadius: 10,
                     cursor: saving ? 'not-allowed' : 'pointer',
                     fontSize: 14, fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                    boxShadow: `0 2px 8px ${isAddMode ? 'rgba(59,130,246,0.35)' : 'rgba(22,163,74,0.35)'}`
+                    boxShadow: '0 2px 8px rgba(22,163,74,0.35)'
                   }}>
                   <FaSave size={13} /> {saving ? 'Saving...' : isAddMode ? 'Add Item' : 'Save Changes'}
                 </button>
 
-                {/* Delete button — only when editing an existing item */}
                 {isEditMode && (
                   <button onClick={handleDelete} style={{ width: '100%', padding: '11px', background: '#fef2f2', color: '#ef4444', border: '1.5px solid #fecaca', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
                     <FaTrash size={12} /> Delete Item
