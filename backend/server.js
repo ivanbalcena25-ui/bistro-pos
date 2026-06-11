@@ -14,11 +14,10 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'], allowedHe
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
-// ── CONNECTION POOL (optimized) ──
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  max: 20,                // max connections sa pool
+  max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 })
@@ -120,7 +119,6 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
 })
 
 // ── MENU ──
-// GET — exclude image para mabilis, hiwalay lang i-fetch kung kailangan
 app.get('/api/menu', auth, async (req, res) => {
   try {
     const [rows] = await query(
@@ -144,7 +142,6 @@ app.post('/api/menu', auth, adminOnly, async (req, res) => {
 app.put('/api/menu/:id', auth, adminOnly, async (req, res) => {
   try {
     const { name, price, category, image, stock } = req.body
-    // compute status based on stock
     const status = (stock ?? 0) <= 0 ? 'Out of Stock' : 'Available'
     await query(
       'UPDATE menu_items SET name=$1, price=$2, category=$3, image=$4, stock=$5, status=$6 WHERE id=$7',
@@ -191,7 +188,7 @@ app.put('/api/tables/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ── TRANSACTIONS — JOIN query, 1 trip lang sa DB ──
+// ── TRANSACTIONS ──
 app.get('/api/transactions', auth, async (req, res) => {
   try {
     const [rows] = await query(`
@@ -219,7 +216,6 @@ app.get('/api/transactions', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// GET single transaction (para sa reprint)
 app.get('/api/transactions/:id', auth, async (req, res) => {
   try {
     const [rows] = await query(`
@@ -255,26 +251,26 @@ app.post('/api/transactions', auth, async (req, res) => {
     const {
       customer_name, table_no, total, amount_paid, change_amount,
       discount_type, discount_amount, payment_method, cashier_name,
-      created_by, items, shift_id, vat_amount
+      created_by, items, shift_id
+      // ✅ REMOVED: vat_amount — wala sa transactions table
     } = req.body
 
     const result = await client.query(
       `INSERT INTO transactions
         (customer_name, table_no, total, amount_paid, change_amount,
          discount_type, discount_amount, payment_method, cashier_name,
-         created_by, shift_id, vat_amount)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         created_by, shift_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING id`,
       [
         customer_name, table_no, total, amount_paid, change_amount,
         discount_type || 'None', discount_amount || 0,
         payment_method || 'Cash', cashier_name || 'Cashier',
-        created_by || 'Cashier', shift_id || null, vat_amount || 0
+        created_by || 'Cashier', shift_id || null
       ]
     )
     const transactionId = result.rows[0].id
 
-    // Batch insert items + update stock — parallel per item
     await Promise.all(items.map(async (item) => {
       const itemName = String(item.name || '').trim()
       const itemPrice = Number(item.price) || 0
@@ -304,7 +300,8 @@ app.put('/api/transactions/:id/void', auth, async (req, res) => {
   try {
     const { void_reason, void_by } = req.body
     await query(
-      'UPDATE transactions SET voided=true, void_reason=$1, void_by=$2 WHERE id=$3',
+      'UPDATE transactions SET voided=1, void_reason=$1, void_by=$2 WHERE id=$3',
+      // ✅ FIX: voided=1 (smallint) hindi voided=true (boolean)
       [void_reason || '', void_by || 'Cashier', req.params.id]
     )
     res.json({ success: true })
@@ -370,7 +367,8 @@ app.put('/api/shifts/:id/close', auth, async (req, res) => {
     )
     if (!rows.length) return res.status(404).json({ error: 'Shift not found' })
     const [txRows] = await query(
-      'SELECT COALESCE(SUM(total),0) AS total_sales, COUNT(*) AS tx_count FROM transactions WHERE shift_id=$1 AND voided=false',
+      'SELECT COALESCE(SUM(total),0) AS total_sales, COUNT(*) AS tx_count FROM transactions WHERE shift_id=$1 AND voided=0',
+      // ✅ FIX: voided=0 (smallint) hindi voided=false (boolean)
       [req.params.id]
     )
     const totalSales = txRows[0].total_sales || 0
@@ -383,7 +381,7 @@ app.put('/api/shifts/:id/close', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ── KITCHEN — JOIN query, 1 trip lang ──
+// ── KITCHEN ──
 app.get('/api/kitchen/orders', auth, async (req, res) => {
   try {
     const [rows] = await query(`
@@ -448,7 +446,7 @@ app.put('/api/kitchen/orders/:id/status', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ── LOW STOCK ALERTS — 1 query lang ──
+// ── LOW STOCK ALERTS ──
 app.get('/api/alerts/low-stock', auth, async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 10
