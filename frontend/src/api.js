@@ -27,86 +27,32 @@ export const login = (username, password) =>
     body: JSON.stringify({ username, password })
   }).then(r => r.json())
 
-export const getMenu = () =>
-  fetch(`${API}/menu`, { headers: authHeaders() }).then(handleResponse)
+export const getMenu = () => fetch(`${API}/menu`, { headers: authHeaders() }).then(handleResponse)
+export const addMenuItem = (data) => fetch(`${API}/menu`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const updateMenuItem = (id, data) => fetch(`${API}/menu/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const deleteMenuItem = (id) => fetch(`${API}/menu/${id}`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse)
 
-export const addMenuItem = (data) =>
-  fetch(`${API}/menu`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const getUsers = () => fetch(`${API}/users`, { headers: authHeaders() }).then(handleResponse)
+export const addUser = (data) => fetch(`${API}/users`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const deleteUser = (id) => fetch(`${API}/users/${id}`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse)
+export const updateUser = (id, data) => fetch(`${API}/users/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
 
-export const updateMenuItem = (id, data) =>
-  fetch(`${API}/menu/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const getTables = () => fetch(`${API}/tables`, { headers: authHeaders() }).then(handleResponse)
+export const updateTable = (id, data) => fetch(`${API}/tables/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const updateTableByNumber = (number, data) => fetch(`${API}/tables/number/${number}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
 
-export const deleteMenuItem = (id) =>
-  fetch(`${API}/menu/${id}`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse)
+export const getTransactions = () => fetch(`${API}/transactions`, { headers: authHeaders() }).then(handleResponse)
+export const addTransaction = (data) => fetch(`${API}/transactions`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const voidTransaction = (id, data) => fetch(`${API}/transactions/${id}/void`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const clearTransactions = () => fetch(`${API}/transactions`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse)
 
-export const getUsers = () =>
-  fetch(`${API}/users`, { headers: authHeaders() }).then(handleResponse)
+export const getShifts = () => fetch(`${API}/shifts`, { headers: authHeaders() }).then(handleResponse)
+export const getActiveShift = () => fetch(`${API}/shifts/active`, { headers: authHeaders() }).then(handleResponse)
+export const openShift = (data) => fetch(`${API}/shifts/open`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const closeShift = (id, data) => fetch(`${API}/shifts/${id}/close`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
 
-export const addUser = (data) =>
-  fetch(`${API}/users`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const getKitchenOrders = () => fetch(`${API}/kitchen/orders`, { headers: authHeaders() }).then(handleResponse)
+export const addKitchenOrder = (data) => fetch(`${API}/kitchen/orders`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
+export const updateKitchenOrderStatus = (id, status) => fetch(`${API}/kitchen/orders/${id}/status`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status }) }).then(handleResponse)
 
-export const deleteUser = (id) =>
-  fetch(`${API}/users/${id}`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse)
-
-export const updateUser = (id, data) =>
-  fetch(`${API}/users/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
-
-export const getTables = () =>
-  fetch(`${API}/tables`, { headers: authHeaders() }).then(handleResponse)
-
-export const updateTable = (id, data) =>
-  fetch(`${API}/tables/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
-
-export const updateTableByNumber = (number, data) =>
-  fetch(`${API}/tables/number/${number}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
-
-// ── TRANSACTIONS — now paginated ──
-// page & limit are optional; dateFilter: 'today' | 'YYYY-MM-DD' | undefined
-export const getTransactions = ({ page = 1, limit = 50, date } = {}) => {
-  const params = new URLSearchParams({ page, limit })
-  if (date) params.set('date', date)
-  return fetch(`${API}/transactions?${params}`, { headers: authHeaders() }).then(handleResponse)
-}
-
-// Convenience: today's transactions only (used by Transaction page for X/Z reading)
-export const getTodayTransactions = () => getTransactions({ date: 'today', limit: 200 })
-
-export const getTransactionById = (id) =>
-  fetch(`${API}/transactions/${id}`, { headers: authHeaders() }).then(handleResponse)
-
-export const addTransaction = (data) =>
-  fetch(`${API}/transactions`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
-
-export const voidTransaction = (id, data) =>
-  fetch(`${API}/transactions/${id}/void`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
-
-export const clearTransactions = () =>
-  fetch(`${API}/transactions`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse)
-
-export const getShifts = () =>
-  fetch(`${API}/shifts`, { headers: authHeaders() }).then(handleResponse)
-
-export const getActiveShift = () =>
-  fetch(`${API}/shifts/active`, { headers: authHeaders() }).then(handleResponse)
-
-export const openShift = (data) =>
-  fetch(`${API}/shifts/open`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
-
-export const closeShift = (id, data) =>
-  fetch(`${API}/shifts/${id}/close`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
-
-export const getKitchenOrders = () =>
-  fetch(`${API}/kitchen/orders`, { headers: authHeaders() }).then(handleResponse)
-
-export const addKitchenOrder = (data) =>
-  fetch(`${API}/kitchen/orders`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
-
-export const updateKitchenOrderStatus = (id, status) =>
-  fetch(`${API}/kitchen/orders/${id}/status`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify({ status }) }).then(handleResponse)
-
-export const getLowStockAlerts = (threshold = 10) =>
-  fetch(`${API}/alerts/low-stock?threshold=${threshold}`, { headers: authHeaders() }).then(handleResponse)
-
-// ── DASHBOARD STATS — single fast query instead of loading all transactions ──
-export const getDashboardStats = () =>
-  fetch(`${API}/dashboard/stats`, { headers: authHeaders() }).then(handleResponse)
+export const getLowStockAlerts = (threshold = 10) => fetch(`${API}/alerts/low-stock?threshold=${threshold}`, { headers: authHeaders() }).then(handleResponse)

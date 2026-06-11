@@ -14,31 +14,16 @@ app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'], allowedHe
 app.use(express.json({ limit: '50mb' }))
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
-// ── CONNECTION POOL (optimized) ──
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 3000,
+  connectionTimeoutMillis: 2000,
 })
 
 pool.connect()
-  .then(async (client) => {
-    console.log('✅ Connected to PostgreSQL!')
-    // Create indexes on first boot for faster queries
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_transactions_voided ON transactions(voided);
-      CREATE INDEX IF NOT EXISTS idx_transactions_shift_id ON transactions(shift_id);
-      CREATE INDEX IF NOT EXISTS idx_transaction_items_tx_id ON transaction_items(transaction_id);
-      CREATE INDEX IF NOT EXISTS idx_kitchen_orders_status ON kitchen_orders(status);
-      CREATE INDEX IF NOT EXISTS idx_kitchen_order_items_order_id ON kitchen_order_items(order_id);
-      CREATE INDEX IF NOT EXISTS idx_menu_items_status ON menu_items(status);
-      CREATE INDEX IF NOT EXISTS idx_menu_items_category ON menu_items(category);
-    `).catch(e => console.warn('Index hint:', e.message))
-    client.release()
-  })
+  .then(client => { console.log('✅ Connected to PostgreSQL!'); client.release() })
   .catch(err => console.error('❌ DB Error:', err.message))
 
 const query = async (text, params) => {
@@ -46,24 +31,6 @@ const query = async (text, params) => {
   return [res.rows, res]
 }
 
-// ── SIMPLE IN-MEMORY CACHE ──
-const cache = new Map()
-const CACHE_TTL = {
-  menu: 30000,       // 30s — menu changes rarely
-  tables: 5000,      // 5s  — tables need to be fresh
-  alerts: 20000,     // 20s — stock alerts
-}
-
-const getCache = (key) => {
-  const hit = cache.get(key)
-  if (!hit) return null
-  if (Date.now() - hit.ts > hit.ttl) { cache.delete(key); return null }
-  return hit.data
-}
-const setCache = (key, data, ttl) => cache.set(key, { data, ts: Date.now(), ttl })
-const invalidateCache = (...keys) => keys.forEach(k => cache.delete(k))
-
-// ── AUTH MIDDLEWARE ──
 const auth = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1]
   if (!token) return res.status(401).json({ error: 'No token provided' })
@@ -151,17 +118,13 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ── MENU (cached) ──
+// ── MENU ──
 app.get('/api/menu', auth, async (req, res) => {
   try {
-    const cached = getCache('menu')
-    if (cached) return res.json(cached)
-
     const [rows] = await query(
       "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status IS NULL OR status = 'Available' ORDER BY category, name ASC"
     )
     const normalized = rows.map(r => ({ ...r, status: r.status || 'Available' }))
-    setCache('menu', normalized, CACHE_TTL.menu)
     res.json(normalized)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -173,7 +136,6 @@ app.post('/api/menu', auth, adminOnly, async (req, res) => {
       "INSERT INTO menu_items (name, price, category, image, status, stock) VALUES ($1,$2,$3,$4,'Available',$5) RETURNING id",
       [name, price, category, image || null, stock ?? 0]
     )
-    invalidateCache('menu', 'alerts')
     res.json({ id: rows[0].id, name, price, category, image: image || null, status: 'Available', stock: stock ?? 0 })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -185,7 +147,6 @@ app.put('/api/menu/:id', auth, adminOnly, async (req, res) => {
       'UPDATE menu_items SET name=$1, price=$2, category=$3, image=$4, stock=$5, status=$6, updated_at=NOW() WHERE id=$7',
       [name, price, category, image || null, stock ?? 0, status || 'Available', req.params.id]
     )
-    invalidateCache('menu', 'alerts')
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -193,18 +154,14 @@ app.put('/api/menu/:id', auth, adminOnly, async (req, res) => {
 app.delete('/api/menu/:id', auth, adminOnly, async (req, res) => {
   try {
     await query("UPDATE menu_items SET status='Unavailable' WHERE id=$1", [req.params.id])
-    invalidateCache('menu', 'alerts')
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ── TABLES (cached) ──
+// ── TABLES ──
 app.get('/api/tables', auth, async (req, res) => {
   try {
-    const cached = getCache('tables')
-    if (cached) return res.json(cached)
     const [rows] = await query('SELECT * FROM tables_list ORDER BY number ASC')
-    setCache('tables', rows, CACHE_TTL.tables)
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -216,7 +173,6 @@ app.put('/api/tables/number/:number', auth, async (req, res) => {
       'UPDATE tables_list SET status=$1, customer=$2, updated_at=NOW() WHERE number=$3',
       [status, customer || '', req.params.number]
     )
-    invalidateCache('tables')
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -228,38 +184,13 @@ app.put('/api/tables/:id', auth, async (req, res) => {
       'UPDATE tables_list SET status=$1, customer=$2, updated_at=NOW() WHERE id=$3',
       [status, customer || '', req.params.id]
     )
-    invalidateCache('tables')
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ── TRANSACTIONS (PAGINATED) ──
-// GET /api/transactions?page=1&limit=50&date=today
+// ── TRANSACTIONS ──
 app.get('/api/transactions', auth, async (req, res) => {
   try {
-    const page  = Math.max(1, parseInt(req.query.page)  || 1)
-    const limit = Math.min(200, parseInt(req.query.limit) || 50)
-    const offset = (page - 1) * limit
-    const dateFilter = req.query.date // 'today' | 'YYYY-MM-DD' | undefined
-
-    let whereClause = ''
-    const params = []
-
-    if (dateFilter === 'today') {
-      whereClause = "WHERE t.created_at >= CURRENT_DATE AND t.created_at < CURRENT_DATE + INTERVAL '1 day'"
-    } else if (dateFilter && /^\d{4}-\d{2}-\d{2}$/.test(dateFilter)) {
-      whereClause = `WHERE t.created_at >= $1 AND t.created_at < $1::date + INTERVAL '1 day'`
-      params.push(dateFilter)
-    }
-
-    const countParams = [...params]
-    const [countRows] = await query(`SELECT COUNT(*) AS total FROM transactions t ${whereClause}`, countParams)
-    const total = parseInt(countRows[0].total)
-
-    const dataParams = [...params, limit, offset]
-    const limitIdx  = params.length + 1
-    const offsetIdx = params.length + 2
-
     const [rows] = await query(`
       SELECT
         t.*,
@@ -278,89 +209,10 @@ app.get('/api/transactions', auth, async (req, res) => {
         ) AS items
       FROM transactions t
       LEFT JOIN transaction_items ti ON ti.transaction_id = t.id
-      ${whereClause}
       GROUP BY t.id
       ORDER BY t.created_at DESC
-      LIMIT $${limitIdx} OFFSET $${offsetIdx}
-    `, dataParams)
-
-    res.json({
-      data: rows,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
-    })
-  } catch (err) { res.status(500).json({ error: err.message }) }
-})
-
-// ── DASHBOARD STATS (single optimized query, no full table scan) ──
-app.get('/api/dashboard/stats', auth, adminOnly, async (req, res) => {
-  try {
-    const [statsRows] = await query(`
-      SELECT
-        COALESCE(SUM(CASE WHEN voided=0 THEN total ELSE 0 END), 0)          AS total_sales,
-        COUNT(CASE WHEN voided=0 THEN 1 END)                                  AS order_count,
-        COUNT(DISTINCT CASE WHEN voided=0 THEN customer_name END)            AS customer_count,
-        COALESCE(SUM(CASE WHEN voided=0 THEN total ELSE 0 END
-          FILTER (WHERE payment_method='Cash')), 0)                           AS cash_sales,
-        COALESCE(SUM(CASE WHEN voided=0 THEN total ELSE 0 END
-          FILTER (WHERE payment_method!='Cash')), 0)                          AS ewallet_sales
-      FROM transactions
-      WHERE created_at >= CURRENT_DATE AND created_at < CURRENT_DATE + INTERVAL '1 day'
     `)
-
-    // Items sold today
-    const [itemRows] = await query(`
-      SELECT COALESCE(SUM(ti.qty), 0) AS items_sold
-      FROM transactions t
-      JOIN transaction_items ti ON ti.transaction_id = t.id
-      WHERE t.created_at >= CURRENT_DATE AND t.voided = 0
-    `)
-
-    // Last 7 days chart
-    const [chartRows] = await query(`
-      SELECT
-        DATE(created_at) AS day,
-        COALESCE(SUM(CASE WHEN voided=0 THEN total ELSE 0 END), 0) AS sales,
-        COUNT(CASE WHEN voided=0 THEN 1 END)                        AS orders
-      FROM transactions
-      WHERE created_at >= CURRENT_DATE - INTERVAL '6 days'
-      GROUP BY DATE(created_at)
-      ORDER BY day ASC
-    `)
-
-    // Top 5 selling items (all time for leaderboard)
-    const [topRows] = await query(`
-      SELECT ti.item_name AS name, SUM(ti.qty) AS qty
-      FROM transaction_items ti
-      JOIN transactions t ON t.id = ti.transaction_id
-      WHERE t.voided = 0
-      GROUP BY ti.item_name
-      ORDER BY qty DESC
-      LIMIT 5
-    `)
-
-    // Recent 5 transactions
-    const [recentRows] = await query(`
-      SELECT id, customer_name, table_no, total, payment_method, created_at
-      FROM transactions
-      ORDER BY created_at DESC
-      LIMIT 5
-    `)
-
-    res.json({
-      stats: {
-        sales: Number(statsRows[0].total_sales),
-        orders: Number(statsRows[0].order_count),
-        customers: Number(statsRows[0].customer_count),
-        items: Number(itemRows[0].items_sold),
-      },
-      chartData: chartRows.map(r => ({
-        day: new Date(r.day).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        sales: Number(r.sales),
-        orders: Number(r.orders),
-      })),
-      topItems: topRows.map(r => [r.name, Number(r.qty)]),
-      recent: recentRows,
-    })
+    res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -418,34 +270,21 @@ app.post('/api/transactions', auth, async (req, res) => {
     )
     const transactionId = result.rows[0].id
 
-    // Batch insert items (single query, much faster)
-    if (items && items.length > 0) {
-      const itemValues = items.map((item, idx) => {
-        const base = idx * 5
-        return `($${base+1},$${base+2},$${base+3},$${base+4},$${base+5})`
-      }).join(',')
-      const itemParams = items.flatMap(item => {
-        const name  = String(item.name  || '').trim()
-        const price = Number(item.price) || 0
-        const qty   = Number(item.qty)   || 1
-        return [transactionId, name, price, qty, price * qty]
-      })
+    await Promise.all(items.map(async (item) => {
+      const itemName = String(item.name || '').trim()
+      const itemPrice = Number(item.price) || 0
+      const itemQty = Number(item.qty) || 1
       await client.query(
-        `INSERT INTO transaction_items (transaction_id, item_name, price, qty, subtotal) VALUES ${itemValues}`,
-        itemParams
+        'INSERT INTO transaction_items (transaction_id, item_name, price, qty, subtotal) VALUES ($1,$2,$3,$4,$5)',
+        [transactionId, itemName, itemPrice, itemQty, itemPrice * itemQty]
       )
-
-      // Batch update stock
-      for (const item of items) {
-        await client.query(
-          'UPDATE menu_items SET stock = GREATEST(stock - $1, 0) WHERE id = $2',
-          [Number(item.qty) || 1, item.id]
-        )
-      }
-    }
+      await client.query(
+        'UPDATE menu_items SET stock = GREATEST(stock - $1, 0) WHERE id = $2',
+        [itemQty, item.id]
+      )
+    }))
 
     await client.query('COMMIT')
-    invalidateCache('menu', 'alerts')
     res.json({ id: transactionId, success: true })
   } catch (err) {
     await client.query('ROLLBACK')
@@ -530,7 +369,7 @@ app.put('/api/shifts/:id/close', auth, async (req, res) => {
       [req.params.id]
     )
     const totalSales = txRows[0].total_sales || 0
-    const txCount    = txRows[0].tx_count    || 0
+    const txCount = txRows[0].tx_count || 0
     await query(
       "UPDATE shifts SET status='Closed', closing_cash=$1, total_sales=$2, transaction_count=$3, closed_at=NOW() WHERE id=$4",
       [closing_cash || 0, totalSales, txCount, req.params.id]
@@ -562,7 +401,6 @@ app.get('/api/kitchen/orders', auth, async (req, res) => {
       WHERE ko.status != 'Served'
       GROUP BY ko.id
       ORDER BY ko.created_at ASC
-      LIMIT 50
     `)
     res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -578,15 +416,12 @@ app.post('/api/kitchen/orders', auth, async (req, res) => {
       [table_no, cashier_name]
     )
     const orderId = result.rows[0].id
-
-    if (items && items.length > 0) {
-      const vals = items.map((_, i) => `($${i*4+1},$${i*4+2},$${i*4+3},$${i*4+4})`).join(',')
-      const params = items.flatMap(item => [orderId, item.name, item.qty, item.notes || ''])
-      await client.query(
-        `INSERT INTO kitchen_order_items (order_id, item_name, qty, notes) VALUES ${vals}`,
-        params
+    await Promise.all(items.map(item =>
+      client.query(
+        'INSERT INTO kitchen_order_items (order_id, item_name, qty, notes) VALUES ($1,$2,$3,$4)',
+        [orderId, item.name, item.qty, item.notes || '']
       )
-    }
+    ))
     await client.query('COMMIT')
     res.json({ id: orderId, success: true })
   } catch (err) {
@@ -608,14 +443,10 @@ app.put('/api/kitchen/orders/:id/status', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ── LOW STOCK ALERTS (cached) ──
+// ── LOW STOCK ALERTS ──
 app.get('/api/alerts/low-stock', auth, async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 10
-    const cacheKey = `alerts_${threshold}`
-    const cached = getCache(cacheKey)
-    if (cached) return res.json(cached)
-
     const [rows] = await query(
       `SELECT id, name, category, stock,
         CASE WHEN stock = 0 THEN 'out' ELSE 'low' END AS alert_type
@@ -624,12 +455,10 @@ app.get('/api/alerts/low-stock', auth, async (req, res) => {
        ORDER BY stock ASC`,
       [threshold]
     )
-    const result = {
-      lowStock:  rows.filter(r => r.alert_type === 'low' && r.stock > 0),
+    res.json({
+      lowStock: rows.filter(r => r.alert_type === 'low' && r.stock > 0),
       outOfStock: rows.filter(r => r.alert_type === 'out')
-    }
-    setCache(cacheKey, result, CACHE_TTL.alerts)
-    res.json(result)
+    })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
