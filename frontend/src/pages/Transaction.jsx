@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import Navbar from '../components/Navbar'
 import { FaPrint, FaTimes, FaFileAlt, FaQrcode, FaCog, FaPlus, FaTrash } from 'react-icons/fa'
 import * as XLSX from 'xlsx'
 import {
   getMenu, getTables, updateTableByNumber,
-  addTransaction, getTransactions, voidTransaction,
-  getActiveShift, openShift, closeShift, addKitchenOrder,
-  getLowStockAlerts
+  addTransaction, getTodayTransactions, getTransactionById,
+  voidTransaction, getActiveShift, openShift, closeShift,
+  addKitchenOrder, getLowStockAlerts
 } from '../api'
 
 const categoryIcons = { Coffee: '☕', 'Non-Coffee': '🧃', Beer: '🍺', Pulutan: '🍗' }
@@ -47,46 +47,53 @@ function Transaction() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const [settings, setSettings] = useState(loadSettings)
+  const [settings, setSettings]             = useState(loadSettings)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
-  const [tmpSettings, setTmpSettings] = useState(null)
+  const [tmpSettings, setTmpSettings]       = useState(null)
   const [availableItems, setAvailableItems] = useState([])
-  const [tables, setTables] = useState([])
-  const [cart, setCart] = useState([])
-  const [tableNo, setTableNo] = useState('')
-  const [tableError, setTableError] = useState('')
-  const [amountPaid, setAmountPaid] = useState('')
+  const [tables, setTables]                 = useState([])
+  const [cart, setCart]                     = useState([])
+  const [tableNo, setTableNo]               = useState('')
+  const [tableError, setTableError]         = useState('')
+  const [amountPaid, setAmountPaid]         = useState('')
   const [amountPaidDisplay, setAmountPaidDisplay] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('Cash')
-  const [receipt, setReceipt] = useState(null)
+  const [paymentMethod, setPaymentMethod]   = useState('Cash')
+  const [receipt, setReceipt]               = useState(null)
   const [activeCategory, setActiveCategory] = useState('Coffee')
-  const [showVoidModal, setShowVoidModal] = useState(false)
-  const [voidReason, setVoidReason] = useState('')
-  const [showZReading, setShowZReading] = useState(false)
-  const [showXReading, setShowXReading] = useState(false)
+  const [showVoidModal, setShowVoidModal]   = useState(false)
+  const [voidReason, setVoidReason]         = useState('')
+  const [showZReading, setShowZReading]     = useState(false)
+  const [showXReading, setShowXReading]     = useState(false)
   const [allTransactions, setAllTransactions] = useState([])
-  const [lastTxId, setLastTxId] = useState(null)
-  const [lastTableNo, setLastTableNo] = useState(null)
-  const [showQRModal, setShowQRModal] = useState(false)
-  const [activeShift, setActiveShift] = useState(null)
+  const [lastTxId, setLastTxId]             = useState(null)
+  const [lastTableNo, setLastTableNo]       = useState(null)
+  const [showQRModal, setShowQRModal]       = useState(false)
+  const [activeShift, setActiveShift]       = useState(null)
   const [showShiftModal, setShowShiftModal] = useState(false)
-  const [openingCash, setOpeningCash] = useState('')
+  const [openingCash, setOpeningCash]       = useState('')
   const [openingCashDisplay, setOpeningCashDisplay] = useState('')
-  const [closingCash, setClosingCash] = useState('')
+  const [closingCash, setClosingCash]       = useState('')
   const [closingCashDisplay, setClosingCashDisplay] = useState('')
   const [lowStockAlerts, setLowStockAlerts] = useState({ lowStock: [], outOfStock: [] })
-  const [showAlerts, setShowAlerts] = useState(false)
-  const [loadingMenu, setLoadingMenu] = useState(true)
+  const [showAlerts, setShowAlerts]         = useState(false)
+  const [loadingMenu, setLoadingMenu]       = useState(true)
   const [loadingCheckout, setLoadingCheckout] = useState(false)
-  const [loadingVoid, setLoadingVoid] = useState(false)
-  const [error, setError] = useState('')
+  const [loadingVoid, setLoadingVoid]       = useState(false)
+  const [error, setError]                   = useState('')
   const [showReprintModal, setShowReprintModal] = useState(false)
-  const [reprintTxId, setReprintTxId] = useState('')
+  const [reprintTxId, setReprintTxId]       = useState('')
 
   const activeShiftRef = useRef(null)
-  const qrRefGCash = useRef(); const qrRefMaya = useRef()
+  const qrRefGCash     = useRef(); const qrRefMaya = useRef()
   const qrRefShopeePay = useRef(); const qrRefGrabPay = useRef()
-  const qrInputRefs = { GCash: qrRefGCash, Maya: qrRefMaya, ShopeePay: qrRefShopeePay, GrabPay: qrRefGrabPay }
+  const qrInputRefs    = { GCash: qrRefGCash, Maya: qrRefMaya, ShopeePay: qrRefShopeePay, GrabPay: qrRefGrabPay }
+
+  // ── Memoized discount map — only recomputes when settings change ──
+  const discountMap = useMemo(() => {
+    const map = {}
+    settings.discounts.forEach(d => { map[d.label] = d.rate / 100 })
+    return map
+  }, [settings.discounts])
 
   const loadMenu = useCallback(async () => {
     setLoadingMenu(true)
@@ -101,8 +108,12 @@ function Transaction() {
     try { const d = await getTables(); setTables(Array.isArray(d) ? d : []) } catch {}
   }, [])
 
+  // Only load today's transactions (not all-time) — much faster
   const loadTransactions = useCallback(async () => {
-    try { const d = await getTransactions(); setAllTransactions(Array.isArray(d) ? d : []) } catch {}
+    try {
+      const res = await getTodayTransactions()
+      setAllTransactions(Array.isArray(res.data) ? res.data : [])
+    } catch {}
   }, [])
 
   const loadActiveShift = useCallback(async () => {
@@ -119,21 +130,29 @@ function Transaction() {
 
   useEffect(() => {
     Promise.all([loadMenu(), loadTablesSilent(), loadTransactions(), loadActiveShift(), loadAlertsSilent()])
-    const interval = setInterval(() => { loadTablesSilent(); loadAlertsSilent() }, 8000)
-    const shiftInterval = setInterval(() => { loadActiveShift() }, 30000)
-    return () => { clearInterval(interval); clearInterval(shiftInterval) }
+
+    // Tables: poll every 15s (was 8s — still fast enough for a restaurant)
+    const tableInterval = setInterval(loadTablesSilent, 15000)
+    // Alerts: poll every 60s (was 8s — stock doesn't change that fast)
+    const alertInterval = setInterval(loadAlertsSilent, 60000)
+    // Shift: poll every 60s (was 30s)
+    const shiftInterval = setInterval(loadActiveShift, 60000)
+
+    return () => {
+      clearInterval(tableInterval)
+      clearInterval(alertInterval)
+      clearInterval(shiftInterval)
+    }
   }, [])
 
-  const getDiscountMap = () => {
+  // ── Memoized table status lookup ──
+  const tableStatusMap = useMemo(() => {
     const map = {}
-    settings.discounts.forEach(d => { map[d.label] = d.rate / 100 })
+    tables.forEach(t => { map[t.number] = t.status })
     return map
-  }
-
-  const getTableStatus = useCallback((num) => {
-    const t = tables.find(t => t.number === num)
-    return t ? t.status : 'Available'
   }, [tables])
+
+  const getTableStatus = useCallback((num) => tableStatusMap[num] || 'Available', [tableStatusMap])
 
   const handleTableChange = (e) => {
     const val = e.target.value
@@ -178,13 +197,24 @@ function Transaction() {
     setCart(prev => prev.filter(c => c.id !== id))
   }, [])
 
-  const getItemSubtotal = (item) => item.price * item.qty
-  const getItemDiscountAmt = (item) => { const map = getDiscountMap(); return getItemSubtotal(item) * (map[item.discount || 'None'] || 0) }
-  const getItemTotal = (item) => getItemSubtotal(item) - getItemDiscountAmt(item)
-  const getSubtotalBeforeVat = () => cart.reduce((sum, c) => sum + getItemTotal(c), 0)
-  const getVatAmount = () => settings.vatEnabled ? getSubtotalBeforeVat() * (settings.vatRate / 100) : 0
-  const getTotal = () => getSubtotalBeforeVat() + getVatAmount()
-  const getChange = () => Math.max(0, parseFloat(amountPaid || 0) - getTotal())
+  // ── Memoized totals — only recomputes when cart or settings change ──
+  const cartTotals = useMemo(() => {
+    const items = cart.map(item => {
+      const subtotal     = item.price * item.qty
+      const discountRate = discountMap[item.discount || 'None'] || 0
+      const discountAmt  = subtotal * discountRate
+      const total        = subtotal - discountAmt
+      return { ...item, subtotal, discountAmt, total }
+    })
+    const subtotal = items.reduce((sum, i) => sum + i.total, 0)
+    const vat      = settings.vatEnabled ? subtotal * (settings.vatRate / 100) : 0
+    const total    = subtotal + vat
+    return { items, subtotal, vat, total }
+  }, [cart, discountMap, settings.vatEnabled, settings.vatRate])
+
+  const getChange = useCallback(() =>
+    Math.max(0, parseFloat(amountPaid || 0) - cartTotals.total),
+  [amountPaid, cartTotals.total])
 
   const handleAmountPaidChange = (e) => {
     const raw = e.target.value.replace(/,/g, '')
@@ -205,37 +235,36 @@ function Transaction() {
   const handleCheckout = async () => {
     setError('')
     const currentShift = activeShiftRef.current
-    if (!currentShift) { alert('No active shift!'); return }
-    if (!tableNo.trim()) return alert('Please enter table number!')
+    if (!currentShift)                                      return alert('No active shift!')
+    if (!tableNo.trim())                                    return alert('Please enter table number!')
     const num = parseInt(tableNo)
-    if (num < 1 || num > TOTAL_TABLES) return alert(`Table must be 1–${TOTAL_TABLES}.`)
-    if (getTableStatus(num) === 'Occupied') return alert(`Table ${num} is occupied!`)
-    if (cart.length === 0) return alert('Please add at least one item!')
-    if (paymentMethod === 'Cash' && !amountPaid) return alert('Please enter amount paid!')
-    if (paymentMethod === 'Cash' && parseFloat(amountPaid) < getTotal()) return alert('Insufficient payment!')
+    if (num < 1 || num > TOTAL_TABLES)                     return alert(`Table must be 1–${TOTAL_TABLES}.`)
+    if (getTableStatus(num) === 'Occupied')                return alert(`Table ${num} is occupied!`)
+    if (cart.length === 0)                                  return alert('Please add at least one item!')
+    if (paymentMethod === 'Cash' && !amountPaid)            return alert('Please enter amount paid!')
+    if (paymentMethod === 'Cash' && parseFloat(amountPaid) < cartTotals.total) return alert('Insufficient payment!')
 
     setLoadingCheckout(true)
-    const total = getTotal()
-    const paid = paymentMethod === 'Cash' ? parseFloat(amountPaid) : total
+    const { total, subtotal, vat } = cartTotals
+    const paid   = paymentMethod === 'Cash' ? parseFloat(amountPaid) : total
     const change = paymentMethod === 'Cash' ? getChange() : 0
 
     try {
-      const [result] = await Promise.all([
-        addTransaction({
-          customer_name: `Table ${num}`, table_no: num, total,
-          amount_paid: paid, change_amount: change,
-          discount_type: 'None', discount_amount: 0,
-          vat_amount: getVatAmount(), payment_method: paymentMethod,
-          cashier_name: user.username || 'Cashier',
-          created_by: user.username || 'Cashier',
-          shift_id: currentShift?.id || null,
-          items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
-        }),
-      ])
+      const result = await addTransaction({
+        customer_name: `Table ${num}`, table_no: num, total,
+        amount_paid: paid, change_amount: change,
+        discount_type: 'None', discount_amount: 0,
+        vat_amount: vat, payment_method: paymentMethod,
+        cashier_name: user.username || 'Cashier',
+        created_by: user.username || 'Cashier',
+        shift_id: currentShift?.id || null,
+        items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
+      })
 
       setLastTxId(result.id)
       setLastTableNo(num)
 
+      // Fire-and-forget side effects (don't block receipt)
       Promise.all([
         addKitchenOrder({
           table_no: num, cashier_name: user.username || 'Cashier',
@@ -248,14 +277,14 @@ function Transaction() {
 
       const receiptData = {
         id: result.id, tableNo,
-        items: cart.map(i => ({
+        items: cartTotals.items.map(i => ({
           name: i.name, price: i.price, qty: i.qty,
           item_discount: i.discount || 'None',
-          item_discount_amount: getItemDiscountAmt(i),
-          item_total: getItemTotal(i)
+          item_discount_amount: i.discountAmt,
+          item_total: i.total
         })),
-        subtotal: getSubtotalBeforeVat(), vat_enabled: settings.vatEnabled,
-        vat_rate: settings.vatRate, vat_amount: getVatAmount(),
+        subtotal, vat_enabled: settings.vatEnabled,
+        vat_rate: settings.vatRate, vat_amount: vat,
         total, paid, change, payment_method: paymentMethod,
         cashier_name: user.username || 'Cashier',
         date: new Date().toLocaleString(), voided: false,
@@ -269,6 +298,7 @@ function Transaction() {
       if (E_WALLETS.includes(paymentMethod)) setShowQRModal(true)
       else setTimeout(() => printReceipt(receiptData, true), 300)
 
+      // Refresh today's transactions in background
       loadTransactions()
 
     } catch (e) { setError('Failed to save transaction! ' + e.message) }
@@ -277,7 +307,7 @@ function Transaction() {
 
   const handleVoid = async () => {
     if (!voidReason.trim()) return alert('Please enter void reason!')
-    if (!lastTxId) return alert('No transaction to void!')
+    if (!lastTxId)          return alert('No transaction to void!')
     setLoadingVoid(true)
     try {
       await voidTransaction(lastTxId, { void_reason: voidReason, void_by: user.username || 'Cashier' })
@@ -313,9 +343,16 @@ function Transaction() {
     } catch (e) { alert('Failed to close shift: ' + e.message) }
   }
 
-  const handleReprintById = () => {
+  const handleReprintById = async () => {
     const id = parseInt(reprintTxId)
-    const tx = allTransactions.find(t => t.id === id)
+    // First check local today's transactions
+    let tx = allTransactions.find(t => t.id === id)
+    // If not found locally, fetch from server
+    if (!tx) {
+      try {
+        tx = await getTransactionById(id)
+      } catch { return alert('Transaction not found!') }
+    }
     if (!tx) return alert('Transaction not found!')
     if (tx.voided) return alert('This transaction is voided.')
     const r = {
@@ -340,7 +377,7 @@ function Transaction() {
     reader.onload = (e) => setTmpSettings(prev => ({ ...prev, qrImages: { ...prev.qrImages, [wallet]: e.target.result } }))
     reader.readAsDataURL(file)
   }
-  const addDiscount = () => setTmpSettings(prev => ({ ...prev, discounts: [...prev.discounts, { label: 'New Discount', rate: 10 }] }))
+  const addDiscount    = () => setTmpSettings(prev => ({ ...prev, discounts: [...prev.discounts, { label: 'New Discount', rate: 10 }] }))
   const updateDiscount = (idx, field, val) => setTmpSettings(prev => { const d = [...prev.discounts]; d[idx] = { ...d[idx], [field]: val }; return { ...prev, discounts: d } })
   const removeDiscount = (idx) => setTmpSettings(prev => ({ ...prev, discounts: prev.discounts.filter((_, i) => i !== idx) }))
 
@@ -422,46 +459,46 @@ function Transaction() {
     if (!preview) { setTimeout(() => { win.print(); win.close() }, 600) }
   }
 
-  const getStockBadge = (item) => {
+  const getStockBadge = useCallback((item) => {
     const s = item.stock ?? 0
-    if (s === 0) return { label: 'Out of Stock', color: '#ef4444', bg: '#fef2f2' }
-    if (s <= 10) return { label: `⚠️ ${s} left`, color: '#d97706', bg: '#fffbeb' }
-    return { label: `${s} left`, color: '#16a34a', bg: '#f0fdf4' }
-  }
+    if (s === 0)   return { label: 'Out of Stock',  color: '#ef4444', bg: '#fef2f2' }
+    if (s <= 10)   return { label: `⚠️ ${s} left`,  color: '#d97706', bg: '#fffbeb' }
+    return               { label: `${s} left`,      color: '#16a34a', bg: '#f0fdf4' }
+  }, [])
 
-  const getZData = () => {
-    const today = new Date().toDateString()
-    const todayTx = allTransactions.filter(t => new Date(t.created_at).toDateString() === today)
-    const validTx = todayTx.filter(t => !t.voided)
+  // ── Memoized Z/X data — only recomputes when transactions change ──
+  const zData = useMemo(() => {
+    const validTx  = allTransactions.filter(t => !t.voided)
     const cashiers = [...new Set(validTx.map(t => t.cashier_name))]
     return {
-      total: validTx.reduce((s, t) => s + Number(t.total), 0),
-      count: validTx.length, voided: todayTx.filter(t => t.voided).length, cashiers,
+      total:  validTx.reduce((s, t) => s + Number(t.total), 0),
+      count:  validTx.length,
+      voided: allTransactions.filter(t => t.voided).length,
+      cashiers,
       byPayment: ['Cash', 'GCash', 'Maya', 'ShopeePay', 'GrabPay'].map(pm => ({
         method: pm,
         amount: validTx.filter(t => t.payment_method === pm).reduce((s, t) => s + Number(t.total), 0),
-        count: validTx.filter(t => t.payment_method === pm).length,
+        count:  validTx.filter(t => t.payment_method === pm).length,
       })).filter(p => p.count > 0),
       byCashier: cashiers.map(c => ({
-        name: c,
+        name:  c,
         total: validTx.filter(t => t.cashier_name === c).reduce((s, t) => s + Number(t.total), 0),
         count: validTx.filter(t => t.cashier_name === c).length,
       }))
     }
-  }
+  }, [allTransactions])
 
   const downloadZReadingExcel = () => {
-    const today = new Date().toDateString()
-    const todayTx = allTransactions.filter(t => new Date(t.created_at).toDateString() === today)
-    const validTx = todayTx.filter(t => !t.voided); const voidedTx = todayTx.filter(t => t.voided)
     const dateStr = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+    const validTx  = allTransactions.filter(t => !t.voided)
+    const voidedTx = allTransactions.filter(t => t.voided)
     const wb = XLSX.utils.book_new()
     const summaryData = [
       ['VS HOTEL BISTRO'], ['Z-READING — DAILY SALES REPORT'], [`Date: ${dateStr}`],
       [`Generated: ${new Date().toLocaleString()}`], [`Generated by: ${user.username}`], [],
       ['OVERALL SUMMARY'], ['Total Transactions', validTx.length], ['Voided Transactions', voidedTx.length],
       ['Gross Sales', validTx.reduce((s, t) => s + Number(t.total), 0)],
-      ['Net Sales', validTx.reduce((s, t) => s + Number(t.total), 0)], [],
+      ['Net Sales',   validTx.reduce((s, t) => s + Number(t.total), 0)], [],
       ['PAYMENT METHOD BREAKDOWN'],
       ...['Cash', 'GCash', 'Maya', 'ShopeePay', 'GrabPay'].map(pm => {
         const pmTx = validTx.filter(t => t.payment_method === pm)
@@ -476,20 +513,20 @@ function Transaction() {
     ]), 'Per Cashier')
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ['#', 'Time', 'Table', 'Cashier', 'Payment', 'Total', 'Status'],
-      ...todayTx.map((t, i) => [i + 1, new Date(t.created_at).toLocaleTimeString(), `Table ${t.table_no}`, t.cashier_name, t.payment_method || 'Cash', t.total, t.voided ? `VOIDED: ${t.void_reason || ''}` : 'Valid'])
+      ...allTransactions.map((t, i) => [i + 1, new Date(t.created_at).toLocaleTimeString(), `Table ${t.table_no}`, t.cashier_name, t.payment_method || 'Cash', t.total, t.voided ? `VOIDED: ${t.void_reason || ''}` : 'Valid'])
     ]), 'All Transactions')
     XLSX.writeFile(wb, `ZReading_${new Date().toISOString().slice(0, 10)}.xlsx`)
     setShowZReading(false)
   }
 
   const downloadXReadingExcel = () => {
-    const now = new Date(); const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0)
-    const currentTx = allTransactions.filter(t => new Date(t.created_at) >= startOfDay && new Date(t.created_at) <= now)
-    const validTx = currentTx.filter(t => !t.voided)
+    const now     = new Date()
+    const validTx = allTransactions.filter(t => !t.voided)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
       ['VS HOTEL BISTRO'], ['X-READING — MID-DAY SNAPSHOT'], [`As of: ${now.toLocaleString()}`], [`Generated by: ${user.username}`], [],
-      ['Transactions so far today', validTx.length], ['Voided', currentTx.filter(t => t.voided).length],
+      ['Transactions so far today', validTx.length],
+      ['Voided', allTransactions.filter(t => t.voided).length],
       ['Current Sales', validTx.reduce((s, t) => s + Number(t.total), 0)], [],
       ['NOTE: This is a non-resetting snapshot. Use Z-Reading to close the day.']
     ]), 'X-Reading')
@@ -498,11 +535,18 @@ function Transaction() {
   }
 
   const totalAlerts = lowStockAlerts.lowStock.length + lowStockAlerts.outOfStock.length
-  const filtered = availableItems.filter(i => i.category === activeCategory)
-  const subtotal = getSubtotalBeforeVat(); const vatAmt = getVatAmount()
-  const total = getTotal(); const paid = parseFloat(amountPaid || 0); const change = getChange()
 
-  const CartPanel = (
+  // ── Memoized filtered items by category ──
+  const filtered = useMemo(() =>
+    availableItems.filter(i => i.category === activeCategory),
+  [availableItems, activeCategory])
+
+  const { subtotal, vat: vatAmt, total } = cartTotals
+  const paid   = parseFloat(amountPaid || 0)
+  const change = getChange()
+
+  // ── Cart panel memoized to prevent full re-render on every keystroke ──
+  const CartPanel = useMemo(() => (
     <div className="cart-panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3>🧾 Order Summary</h3>
@@ -533,7 +577,7 @@ function Transaction() {
         </div>
       ) : (
         <div className="cart-items">
-          {cart.map(item => (
+          {cartTotals.items.map(item => (
             <div key={item.id} style={{ background: '#f8fafc', borderRadius: 10, padding: '10px 12px', border: '1px solid #e2e8f0', marginBottom: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -553,7 +597,7 @@ function Transaction() {
                   {settings.discounts.map(d => <option key={d.label} value={d.label}>{d.label}</option>)}
                 </select>
               </div>
-              <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#16a34a', marginTop: 5 }}>₱{getItemTotal(item).toLocaleString()}</div>
+              <div style={{ textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#16a34a', marginTop: 5 }}>₱{item.total.toLocaleString()}</div>
             </div>
           ))}
         </div>
@@ -597,7 +641,7 @@ function Transaction() {
         </button>
       )}
     </div>
-  )
+  ), [cart, cartTotals, tableNo, tableError, paymentMethod, amountPaidDisplay, paid, total, subtotal, vatAmt, change, loadingCheckout, activeShift, lastTxId, settings, isMobile])
 
   return (
     <div className="page-container">
@@ -674,8 +718,8 @@ function Transaction() {
                 </div>
               ) : filtered.map(item => {
                 const inCart = cart.find(c => c.id === item.id)
-                const oos = (item.stock ?? 0) === 0
-                const badge = getStockBadge(item)
+                const oos    = (item.stock ?? 0) === 0
+                const badge  = getStockBadge(item)
                 return (
                   <div key={item.id} onClick={() => !oos && addToCart(item)}
                     style={{ background: 'white', borderRadius: 12, overflow: 'hidden', border: `2px solid ${oos ? '#fca5a5' : inCart ? '#16a34a' : '#e2e8f0'}`, opacity: oos ? 0.65 : 1, position: 'relative', cursor: oos ? 'not-allowed' : 'pointer' }}>
@@ -735,8 +779,8 @@ function Transaction() {
                   )}
                   {filtered.map(item => {
                     const inCart = cart.find(c => c.id === item.id)
-                    const oos = (item.stock ?? 0) === 0
-                    const badge = getStockBadge(item)
+                    const oos    = (item.stock ?? 0) === 0
+                    const badge  = getStockBadge(item)
                     return (
                       <div key={item.id} onClick={() => !oos && addToCart(item)}
                         style={{ background: 'white', borderRadius: 14, overflow: 'hidden', border: `2px solid ${oos ? '#fca5a5' : inCart ? '#16a34a' : '#e2e8f0'}`, boxShadow: inCart ? '0 4px 16px rgba(22,163,74,0.15)' : '0 1px 4px rgba(0,0,0,0.05)', transition: 'all 0.18s', opacity: oos ? 0.65 : 1, position: 'relative', cursor: oos ? 'not-allowed' : 'pointer' }}>
@@ -760,6 +804,7 @@ function Transaction() {
           </div>
         )}
 
+        {/* ── MODALS (unchanged UI, same as before) ── */}
         {showSettingsModal && tmpSettings && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 540, maxHeight: '85vh', overflowY: 'auto' }}>
@@ -927,59 +972,50 @@ function Transaction() {
           </div>
         )}
 
-        {showZReading && (() => {
-          const z = getZData()
-          return (
-            <div className="modal-overlay">
-              <div className="modal" style={{ maxWidth: 480 }}>
-                <h2>📊 Z-Reading — End of Day</h2>
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>Total Transactions</span><span style={{ fontWeight: 700 }}>{z.count}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>Voided</span><span style={{ fontWeight: 700, color: '#ef4444' }}>{z.voided}</span></div>
-                  {z.byPayment.map(p => (
-                    <div key={p.method} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#475569' }}>
-                      <span>{p.method} ({p.count})</span><span style={{ fontWeight: 600 }}>₱{p.amount.toLocaleString()}</span>
-                    </div>
-                  ))}
-                  <div style={{ borderTop: '1px dashed #bbf7d0', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 700, color: '#16a34a', fontSize: 16 }}>Net Sales</span>
-                    <span style={{ fontWeight: 800, color: '#16a34a', fontSize: 18 }}>₱{z.total.toLocaleString()}</span>
+        {showZReading && (
+          <div className="modal-overlay">
+            <div className="modal" style={{ maxWidth: 480 }}>
+              <h2>📊 Z-Reading — End of Day</h2>
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>Total Transactions</span><span style={{ fontWeight: 700 }}>{zData.count}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>Voided</span><span style={{ fontWeight: 700, color: '#ef4444' }}>{zData.voided}</span></div>
+                {zData.byPayment.map(p => (
+                  <div key={p.method} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#475569' }}>
+                    <span>{p.method} ({p.count})</span><span style={{ fontWeight: 600 }}>₱{p.amount.toLocaleString()}</span>
                   </div>
-                </div>
-                <div className="form-actions" style={{ marginTop: 16 }}>
-                  <button onClick={downloadZReadingExcel} style={{ padding: '11px 20px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>📥 Download Excel</button>
-                  <button className="btn-secondary" onClick={() => setShowZReading(false)}>Cancel</button>
+                ))}
+                <div style={{ borderTop: '1px dashed #bbf7d0', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, color: '#16a34a', fontSize: 16 }}>Net Sales</span>
+                  <span style={{ fontWeight: 800, color: '#16a34a', fontSize: 18 }}>₱{zData.total.toLocaleString()}</span>
                 </div>
               </div>
+              <div className="form-actions" style={{ marginTop: 16 }}>
+                <button onClick={downloadZReadingExcel} style={{ padding: '11px 20px', background: '#16a34a', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>📥 Download Excel</button>
+                <button className="btn-secondary" onClick={() => setShowZReading(false)}>Cancel</button>
+              </div>
             </div>
-          )
-        })()}
+          </div>
+        )}
 
-        {showXReading && (() => {
-          const now = new Date(); const startOfDay = new Date(now); startOfDay.setHours(0, 0, 0, 0)
-          const currentTx = allTransactions.filter(t => new Date(t.created_at) >= startOfDay)
-          const validTx = currentTx.filter(t => !t.voided)
-          const xTotal = validTx.reduce((s, t) => s + Number(t.total), 0)
-          return (
-            <div className="modal-overlay">
-              <div className="modal" style={{ maxWidth: 440 }}>
-                <h2>📈 X-Reading</h2>
-                <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>Transactions</span><span style={{ fontWeight: 700 }}>{validTx.length}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>Voided</span><span style={{ fontWeight: 700, color: '#ef4444' }}>{currentTx.filter(t => t.voided).length}</span></div>
-                  <div style={{ borderTop: '1px dashed #ddd6fe', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontWeight: 700, color: '#7c3aed', fontSize: 16 }}>Current Sales</span>
-                    <span style={{ fontWeight: 800, color: '#7c3aed', fontSize: 18 }}>₱{xTotal.toLocaleString()}</span>
-                  </div>
-                </div>
-                <div className="form-actions" style={{ marginTop: 16 }}>
-                  <button onClick={downloadXReadingExcel} style={{ padding: '11px 20px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>📥 Download Excel</button>
-                  <button className="btn-secondary" onClick={() => setShowXReading(false)}>Cancel</button>
+        {showXReading && (
+          <div className="modal-overlay">
+            <div className="modal" style={{ maxWidth: 440 }}>
+              <h2>📈 X-Reading</h2>
+              <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>Transactions</span><span style={{ fontWeight: 700 }}>{zData.count}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>Voided</span><span style={{ fontWeight: 700, color: '#ef4444' }}>{zData.voided}</span></div>
+                <div style={{ borderTop: '1px dashed #ddd6fe', paddingTop: 10, display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontWeight: 700, color: '#7c3aed', fontSize: 16 }}>Current Sales</span>
+                  <span style={{ fontWeight: 800, color: '#7c3aed', fontSize: 18 }}>₱{zData.total.toLocaleString()}</span>
                 </div>
               </div>
+              <div className="form-actions" style={{ marginTop: 16 }}>
+                <button onClick={downloadXReadingExcel} style={{ padding: '11px 20px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700 }}>📥 Download Excel</button>
+                <button className="btn-secondary" onClick={() => setShowXReading(false)}>Cancel</button>
+              </div>
             </div>
-          )
-        })()}
+          </div>
+        )}
 
       </div>
     </div>

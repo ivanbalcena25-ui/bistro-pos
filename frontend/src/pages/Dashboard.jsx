@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Navbar from '../components/Navbar'
 import { FaMoneyBillWave, FaShoppingCart, FaUsers, FaCoffee, FaSyncAlt } from 'react-icons/fa'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { getTransactions } from '../api'
+import { getDashboardStats } from '../api'
 
 function Dashboard() {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
-  const [stats, setStats] = useState({ sales: 0, orders: 0, customers: 0, items: 0 })
-  const [recent, setRecent] = useState([])
+  const [stats, setStats]       = useState({ sales: 0, orders: 0, customers: 0, items: 0 })
+  const [recent, setRecent]     = useState([])
   const [topItems, setTopItems] = useState([])
   const [chartData, setChartData] = useState([])
   const [greeting, setGreeting] = useState('')
+  const [loading, setLoading]   = useState(true)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
 
   useEffect(() => {
@@ -19,45 +20,35 @@ function Dashboard() {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const loadData = async () => {
+  // Single API call replaces loading ALL transactions
+  const loadData = useCallback(async () => {
     const h = new Date().getHours()
     setGreeting(h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening')
     try {
-      const all = await getTransactions()
-      if (!Array.isArray(all)) return
-      const today = new Date().toDateString()
-      const todayTx = all.filter(t => new Date(t.created_at).toDateString() === today && !t.voided)
-      setStats({
-        sales: todayTx.reduce((s, t) => s + Number(t.total), 0),
-        orders: todayTx.length,
-        customers: new Set(todayTx.map(t => t.customer_name)).size,
-        items: todayTx.reduce((s, t) => s + (t.items?.reduce((ss, i) => ss + i.qty, 0) || 0), 0),
-      })
-      setRecent([...all].reverse().slice(0, 5))
-      const cnt = {}
-      all.forEach(t => (t.items || []).forEach(i => {
-        const name = i.item_name || i.name
-        cnt[name] = (cnt[name] || 0) + i.qty
-      }))
-      setTopItems(Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 5))
-      const days = []
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i)
-        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        const dayTx = all.filter(t => new Date(t.created_at).toDateString() === d.toDateString() && !t.voided)
-        days.push({ day: label, sales: dayTx.reduce((s, t) => s + Number(t.total), 0), orders: dayTx.length })
-      }
-      setChartData(days)
-    } catch { console.error('Failed to load dashboard data!') }
-  }
+      const d = await getDashboardStats()
+      setStats(d.stats)
+      setChartData(d.chartData)
+      setTopItems(d.topItems)
+      setRecent(d.recent)
+    } catch (e) {
+      console.error('Failed to load dashboard data:', e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  useEffect(() => { loadData(); const id = setInterval(loadData, 10000); return () => clearInterval(id) }, [])
+  useEffect(() => {
+    loadData()
+    // Refresh every 30s — was 10s before, and was loading ALL transactions each time
+    const id = setInterval(loadData, 30000)
+    return () => clearInterval(id)
+  }, [loadData])
 
   const cards = [
-    { icon: <FaMoneyBillWave />, label: "Today's Sales", value: `₱${stats.sales.toLocaleString()}`, color: '#16a34a', bg: '#f0fdf4' },
-    { icon: <FaShoppingCart />, label: 'Orders Today', value: stats.orders, color: '#0d9488', bg: '#f0fdfa' },
-    { icon: <FaUsers />, label: 'Customers Today', value: stats.customers, color: '#d97706', bg: '#fffbeb' },
-    { icon: <FaCoffee />, label: 'Items Sold', value: stats.items, color: '#dc2626', bg: '#fef2f2' },
+    { icon: <FaMoneyBillWave />, label: "Today's Sales",   value: `₱${stats.sales.toLocaleString()}`,  color: '#16a34a', bg: '#f0fdf4' },
+    { icon: <FaShoppingCart />,  label: 'Orders Today',    value: stats.orders,                         color: '#0d9488', bg: '#f0fdfa' },
+    { icon: <FaUsers />,         label: 'Customers Today', value: stats.customers,                      color: '#d97706', bg: '#fffbeb' },
+    { icon: <FaCoffee />,        label: 'Items Sold',      value: stats.items,                          color: '#dc2626', bg: '#fef2f2' },
   ]
   const barColors = ['#16a34a', '#22c55e', '#4ade80', '#86efac', '#bbf7d0']
 
@@ -111,138 +102,146 @@ function Dashboard() {
           </button>
         </div>
 
-        {/* STAT CARDS */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: isMobile ? 10 : 16,
-          marginBottom: 20,
-        }}>
-          {cards.map((s, i) => (
-            <div key={i} style={{
-              background: 'white', borderRadius: 14,
-              padding: isMobile ? '14px 12px' : '20px 22px',
-              display: 'flex', alignItems: 'center',
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>⏳</div>
+            <div style={{ fontWeight: 700 }}>Loading dashboard...</div>
+          </div>
+        ) : (
+          <>
+            {/* STAT CARDS */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(200px, 1fr))',
               gap: isMobile ? 10 : 16,
-              boxShadow: '0 1px 4px rgba(22,163,74,0.08)',
-              border: '1px solid #d1fae5',
-              borderTop: `3px solid ${s.color}`,
+              marginBottom: 20,
             }}>
-              <div style={{
-                width: isMobile ? 40 : 52, height: isMobile ? 40 : 52,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                borderRadius: isMobile ? 10 : 14, flexShrink: 0,
-                fontSize: isMobile ? 17 : 22,
-                background: s.bg, color: s.color,
-              }}>{s.icon}</div>
-              <div>
-                <h3 style={{ fontSize: isMobile ? 18 : 24, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{s.value}</h3>
-                <p style={{ color: '#475569', fontSize: isMobile ? 11 : 13, marginTop: 4, fontWeight: 500 }}>{s.label}</p>
+              {cards.map((s, i) => (
+                <div key={i} style={{
+                  background: 'white', borderRadius: 14,
+                  padding: isMobile ? '14px 12px' : '20px 22px',
+                  display: 'flex', alignItems: 'center',
+                  gap: isMobile ? 10 : 16,
+                  boxShadow: '0 1px 4px rgba(22,163,74,0.08)',
+                  border: '1px solid #d1fae5',
+                  borderTop: `3px solid ${s.color}`,
+                }}>
+                  <div style={{
+                    width: isMobile ? 40 : 52, height: isMobile ? 40 : 52,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: isMobile ? 10 : 14, flexShrink: 0,
+                    fontSize: isMobile ? 17 : 22,
+                    background: s.bg, color: s.color,
+                  }}>{s.icon}</div>
+                  <div>
+                    <h3 style={{ fontSize: isMobile ? 18 : 24, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{s.value}</h3>
+                    <p style={{ color: '#475569', fontSize: isMobile ? 11 : 13, marginTop: 4, fontWeight: 500 }}>{s.label}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* CHARTS */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: 16, marginBottom: 16,
+            }}>
+              <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
+                <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>📈 Sales — Last 7 Days</h2>
+                <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
+                    <XAxis dataKey="day" tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} />
+                    <YAxis tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} width={isMobile ? 50 : 65} />
+                    <Tooltip formatter={(v) => [`₱${v.toLocaleString()}`, 'Sales']} contentStyle={{ borderRadius: 10, border: '1px solid #bbf7d0', fontSize: 12 }} />
+                    <Line type="monotone" dataKey="sales" stroke="#16a34a" strokeWidth={2.5} dot={{ fill: '#16a34a', r: 3 }} activeDot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
+                <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>📊 Orders — Last 7 Days</h2>
+                <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
+                    <XAxis dataKey="day" tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} />
+                    <YAxis tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} width={30} />
+                    <Tooltip formatter={(v) => [v, 'Orders']} contentStyle={{ borderRadius: 10, border: '1px solid #bbf7d0', fontSize: 12 }} />
+                    <Bar dataKey="orders" fill="#16a34a" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* CHARTS */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-          gap: 16, marginBottom: 16,
-        }}>
-          <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
-            <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>📈 Sales — Last 7 Days</h2>
-            <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
-                <XAxis dataKey="day" tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} />
-                <YAxis tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} width={isMobile ? 50 : 65} />
-                <Tooltip formatter={(v) => [`₱${v.toLocaleString()}`, 'Sales']} contentStyle={{ borderRadius: 10, border: '1px solid #bbf7d0', fontSize: 12 }} />
-                <Line type="monotone" dataKey="sales" stroke="#16a34a" strokeWidth={2.5} dot={{ fill: '#16a34a', r: 3 }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
-            <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>📊 Orders — Last 7 Days</h2>
-            <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0fdf4" />
-                <XAxis dataKey="day" tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} />
-                <YAxis tick={{ fontSize: isMobile ? 10 : 11, fill: '#64748b' }} width={30} />
-                <Tooltip formatter={(v) => [v, 'Orders']} contentStyle={{ borderRadius: 10, border: '1px solid #bbf7d0', fontSize: 12 }} />
-                <Bar dataKey="orders" fill="#16a34a" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* BOTTOM PANELS */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-          gap: 16,
-        }}>
-          {/* Recent Transactions */}
-          <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
-            <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>🧾 Recent Transactions</h2>
-            {recent.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>🧾</div>
-                <p style={{ fontWeight: 600, fontSize: 14 }}>No transactions yet</p>
+            {/* BOTTOM PANELS */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+              gap: 16,
+            }}>
+              {/* Recent Transactions */}
+              <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
+                <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>🧾 Recent Transactions</h2>
+                {recent.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>
+                    <div style={{ fontSize: 36, marginBottom: 8 }}>🧾</div>
+                    <p style={{ fontWeight: 600, fontSize: 14 }}>No transactions yet</p>
+                  </div>
+                ) : recent.map((t, i) => (
+                  <div key={t.id} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '10px 0', borderBottom: i < recent.length - 1 ? '1px solid #f0fdf4' : 'none', gap: 8,
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 14, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        👤 {t.customer_name}
+                      </div>
+                      <div style={{ fontSize: isMobile ? 11 : 12, color: '#64748b', marginTop: 2 }}>
+                        Table {t.table_no} · {t.payment_method || 'Cash'}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontWeight: 700, color: '#16a34a', fontSize: isMobile ? 13 : 15 }}>
+                        ₱{Number(t.total).toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                        {new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ) : recent.map((t, i) => (
-              <div key={i} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 0', borderBottom: i < recent.length - 1 ? '1px solid #f0fdf4' : 'none', gap: 8,
-              }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 14, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    👤 {t.customer_name}
-                  </div>
-                  <div style={{ fontSize: isMobile ? 11 : 12, color: '#64748b', marginTop: 2 }}>
-                    Table {t.table_no} · {t.payment_method || 'Cash'}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontWeight: 700, color: '#16a34a', fontSize: isMobile ? 13 : 15 }}>
-                    ₱{Number(t.total).toLocaleString()}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                    {new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
 
-          {/* Top Selling Items */}
-          <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
-            <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>🏆 Top Selling Items</h2>
-            {topItems.length === 0 ? (
-              <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>🍽️</div>
-                <p style={{ fontWeight: 600, fontSize: 14 }}>No data yet</p>
+              {/* Top Selling Items */}
+              <div style={{ background: 'white', padding: isMobile ? '14px 12px' : '20px 22px', borderRadius: 14, border: '1px solid #d1fae5', boxShadow: '0 1px 4px rgba(22,163,74,0.08)' }}>
+                <h2 style={{ marginBottom: 14, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>🏆 Top Selling Items</h2>
+                {topItems.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>
+                    <div style={{ fontSize: 36, marginBottom: 8 }}>🍽️</div>
+                    <p style={{ fontWeight: 600, fontSize: 14 }}>No data yet</p>
+                  </div>
+                ) : topItems.map(([name, qty], i) => {
+                  const pct = Math.round((qty / topItems[0][1]) * 100)
+                  return (
+                    <div key={i} style={{ marginBottom: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                        <span style={{ fontWeight: 600, fontSize: isMobile ? 12 : 13, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                          {i + 1}. {name}
+                        </span>
+                        <span style={{ fontWeight: 700, color: barColors[i], fontSize: 12, flexShrink: 0 }}>
+                          {qty} sold
+                        </span>
+                      </div>
+                      <div style={{ height: 7, background: '#f0fdf4', borderRadius: 10, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: barColors[i], borderRadius: 10, transition: 'width 0.5s' }} />
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            ) : topItems.map(([name, qty], i) => {
-              const pct = Math.round((qty / topItems[0][1]) * 100)
-              return (
-                <div key={i} style={{ marginBottom: 14 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontWeight: 600, fontSize: isMobile ? 12 : 13, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
-                      {i + 1}. {name}
-                    </span>
-                    <span style={{ fontWeight: 700, color: barColors[i], fontSize: 12, flexShrink: 0 }}>
-                      {qty} sold
-                    </span>
-                  </div>
-                  <div style={{ height: 7, background: '#f0fdf4', borderRadius: 10, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: barColors[i], borderRadius: 10, transition: 'width 0.5s' }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
