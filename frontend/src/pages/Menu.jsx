@@ -23,6 +23,7 @@ function Menu() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [saving, setSaving] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true) // Panel is always visible
   const fileRef = useRef()
 
   useEffect(() => { loadMenu() }, [])
@@ -61,17 +62,20 @@ function Menu() {
     setPreview(item.image)
     setError('')
     setSuccess('')
+    setPanelOpen(true)
   }
 
   const handleAddNew = () => {
-    setSelectedItem('new')
+    setSelectedItem(null) // null = add mode
     setForm(emptyForm)
     setPreview(null)
     setError('')
     setSuccess('')
+    setPanelOpen(true)
   }
 
   const handleClose = () => {
+    setPanelOpen(false)
     setSelectedItem(null)
     setForm(emptyForm)
     setPreview(null)
@@ -85,7 +89,8 @@ function Menu() {
     setError('')
     setSaving(true)
     try {
-      if (selectedItem && selectedItem !== 'new') {
+      if (selectedItem) {
+        // EDIT existing item
         const updated = {
           ...selectedItem,
           name: form.name.trim(),
@@ -94,12 +99,13 @@ function Menu() {
           image: form.image,
           stock: Number(form.stock) || 0
         }
-        // Optimistic update
         setItems(prev => prev.map(i => i.id === selectedItem.id ? updated : i))
         setSelectedItem(updated)
         setSuccess('Item updated!')
         await updateMenuItem(selectedItem.id, updated)
+        setTimeout(() => setSuccess(''), 2000)
       } else {
+        // ADD new item
         const payload = {
           name: form.name.trim(),
           price: Number(form.price),
@@ -107,38 +113,43 @@ function Menu() {
           image: form.image,
           stock: Number(form.stock) || 0
         }
-        // Call API first to get the real ID
         const res = await addMenuItem(payload)
         setItems(prev => [...prev, res])
         setSuccess('Item added!')
-        setTimeout(() => { setSuccess(''); handleClose() }, 1000)
+        // After adding, switch to editing the newly added item — panel stays open
+        setSelectedItem(res)
+        setForm({ name: res.name, price: String(res.price), category: res.category, image: res.image, stock: String(res.stock ?? 0) })
+        setPreview(res.image)
+        setTimeout(() => setSuccess(''), 2000)
       }
-      setTimeout(() => setSuccess(''), 2000)
     } catch {
       setError('Failed to save item!')
-      loadMenu() // re-sync if error
+      loadMenu()
     }
     setSaving(false)
   }
 
   const handleDelete = async () => {
-    if (!selectedItem || selectedItem === 'new') return
+    if (!selectedItem) return
     if (!window.confirm(`Delete "${selectedItem.name}"?`)) return
-    // Optimistic delete
     setItems(prev => prev.filter(i => i.id !== selectedItem.id))
-    handleClose()
+    // After delete, reset to Add mode — panel stays open
+    setSelectedItem(null)
+    setForm(emptyForm)
+    setPreview(null)
+    setSuccess('Item deleted!')
+    setTimeout(() => setSuccess(''), 2000)
     try {
       await deleteMenuItem(selectedItem.id)
     } catch {
-      loadMenu() // re-sync if error
+      loadMenu()
     }
   }
 
   const handleToggleStock = async () => {
-    if (!selectedItem || selectedItem === 'new') return
+    if (!selectedItem) return
     const oos = isOutOfStock(selectedItem)
     const updated = { ...selectedItem, stock: oos ? 1 : 0, outOfStock: false }
-    // Optimistic update
     setItems(prev => prev.map(i => i.id === selectedItem.id ? updated : i))
     setSelectedItem(updated)
     try {
@@ -157,7 +168,8 @@ function Menu() {
   const outOfStockCount = items.filter(i => isOutOfStock(i)).length
   const lowStockCount = items.filter(i => isLowStock(i)).length
   const availableCount = items.filter(i => !isOutOfStock(i)).length
-  const isEditing = selectedItem !== null
+  const isAddMode = panelOpen && !selectedItem
+  const isEditMode = panelOpen && selectedItem
 
   return (
     <div className="page-container">
@@ -178,7 +190,7 @@ function Menu() {
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: isEditing ? '1fr 360px' : '1fr', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: panelOpen ? '1fr 360px' : '1fr', gap: 20, alignItems: 'start' }}>
 
           {/* LEFT: Product List */}
           <div>
@@ -235,7 +247,7 @@ function Menu() {
                 ) : filtered.map(item => {
                   const oos = isOutOfStock(item)
                   const sc = getStockColor(item)
-                  const isSelected = selectedItem && selectedItem !== 'new' && selectedItem.id === item.id
+                  const isSelected = selectedItem && selectedItem.id === item.id
                   return (
                     <div
                       key={item.id}
@@ -282,17 +294,23 @@ function Menu() {
             )}
           </div>
 
-          {/* RIGHT: Edit Panel */}
-          {isEditing && (
+          {/* RIGHT: Edit/Add Panel — stays open, user closes manually */}
+          {panelOpen && (
             <div style={{
               background: 'white', borderRadius: 16,
-              border: '2px solid #16a34a',
-              boxShadow: '0 4px 24px rgba(22,163,74,0.14)',
+              border: `2px solid ${isAddMode ? '#3b82f6' : '#16a34a'}`,
+              boxShadow: `0 4px 24px ${isAddMode ? 'rgba(59,130,246,0.14)' : 'rgba(22,163,74,0.14)'}`,
               position: 'sticky', top: 20, overflow: 'hidden'
             }}>
-              <div style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {/* Panel Header */}
+              <div style={{
+                background: isAddMode
+                  ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
+                  : 'linear-gradient(135deg, #16a34a, #15803d)',
+                padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }}>
                 <div style={{ color: 'white', fontWeight: 700, fontSize: 15 }}>
-                  {selectedItem === 'new' ? '➕ Add New Item' : '✏️ Edit Item'}
+                  {isAddMode ? '➕ Add New Item' : '✏️ Edit Item'}
                 </div>
                 <button onClick={handleClose} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: 8, width: 30, height: 30, cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <FaTimes size={13} />
@@ -349,7 +367,8 @@ function Menu() {
                   <input type="number" placeholder="0" value={form.stock} onChange={e => setForm(p => ({ ...p, stock: e.target.value }))} style={{ fontSize: 14 }} />
                 </div>
 
-                {selectedItem && selectedItem !== 'new' && (() => {
+                {/* Stock status toggle — only when editing an existing item */}
+                {isEditMode && (() => {
                   const oos = isOutOfStock(selectedItem)
                   return (
                     <div style={{ background: oos ? '#fef2f2' : '#f0fdf4', border: `1px solid ${oos ? '#fecaca' : '#bbf7d0'}`, borderRadius: 10, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -371,11 +390,24 @@ function Menu() {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  style={{ width: '100%', padding: '12px', background: saving ? '#86efac' : 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', borderRadius: 10, cursor: saving ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 2px 8px rgba(22,163,74,0.35)' }}>
-                  <FaSave size={13} /> {saving ? 'Saving...' : selectedItem === 'new' ? 'Add Item' : 'Save Changes'}
+                  style={{
+                    width: '100%', padding: '12px',
+                    background: saving
+                      ? (isAddMode ? '#93c5fd' : '#86efac')
+                      : isAddMode
+                        ? 'linear-gradient(135deg, #3b82f6, #2563eb)'
+                        : 'linear-gradient(135deg, #16a34a, #15803d)',
+                    color: 'white', border: 'none', borderRadius: 10,
+                    cursor: saving ? 'not-allowed' : 'pointer',
+                    fontSize: 14, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    boxShadow: `0 2px 8px ${isAddMode ? 'rgba(59,130,246,0.35)' : 'rgba(22,163,74,0.35)'}`
+                  }}>
+                  <FaSave size={13} /> {saving ? 'Saving...' : isAddMode ? 'Add Item' : 'Save Changes'}
                 </button>
 
-                {selectedItem && selectedItem !== 'new' && (
+                {/* Delete button — only when editing an existing item */}
+                {isEditMode && (
                   <button onClick={handleDelete} style={{ width: '100%', padding: '11px', background: '#fef2f2', color: '#ef4444', border: '1.5px solid #fecaca', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
                     <FaTrash size={12} /> Delete Item
                   </button>
