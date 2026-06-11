@@ -25,11 +25,15 @@ function CustomerOrder() {
   const loadMenu = async () => {
     setLoading(true); setError('')
     try {
-      const res = await fetch(`${API}/menu`, { headers: { 'Authorization': `Bearer ${user.token || ''}` } })
+      const res = await fetch(`${API}/menu`, {
+        headers: { 'Authorization': `Bearer ${user.token || ''}` }
+      })
       if (!res.ok) throw new Error('Failed to load menu')
       const data = await res.json()
       setAvailableItems(Array.isArray(data) ? data.filter(i => i.status === 'Available' && (i.stock ?? 0) > 0) : [])
-    } catch (e) { setError('Could not load menu. Please check your connection.') }
+    } catch (e) {
+      setError('Could not load menu. Please check your connection.')
+    }
     setLoading(false)
   }
 
@@ -54,31 +58,55 @@ function CustomerOrder() {
   const getTotal = () => cart.reduce((sum, s) => sum + s.price * s.qty, 0)
 
   const handleCheckout = async () => {
-    if (!tableNo || cart.length === 0) { alert('Please enter table number and select at least one item!'); return }
+    if (!tableNo || cart.length === 0) {
+      alert('Please enter table number and select at least one item!')
+      return
+    }
     setOrdering(true)
     try {
       const token = user.token || ''
+
+      const payload = {
+        customer_name: `Table ${tableNo}`,
+        table_no: parseInt(tableNo),
+        total: getTotal(),
+        amount_paid: getTotal(),
+        change_amount: 0,
+        discount_type: 'None',
+        discount_amount: 0,
+        payment_method: 'Cash',
+        cashier_name: user.username || 'Customer',
+        created_by: user.username || 'Customer',
+        shift_id: null,
+        items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
+      }
+
       const txRes = await fetch(`${API}/transactions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          customer_name: `Table ${tableNo}`, table_no: parseInt(tableNo),
-          total: getTotal(), amount_paid: getTotal(), change_amount: 0,
-          discount_type: 'None', discount_amount: 0, payment_method: 'Pending Payment',
-          cashier_name: user.username || 'Customer', created_by: user.username || 'Customer',
-          items: cart.map(i => ({ id: i.id, name: i.name, price: i.price, qty: i.qty }))
-        })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
       })
-      if (!txRes.ok) throw new Error('Failed to submit order')
+
+      const txData = await txRes.json()
+
+      if (!txRes.ok) throw new Error(txData.error || 'Failed to submit order')
 
       await fetch(`${API}/tables/number/${tableNo}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ status: 'Occupied', customer: `Table ${tableNo}` })
       })
 
       setOrdered(true)
-    } catch (e) { alert('Failed to submit order: ' + e.message) }
+    } catch (e) {
+      alert('Failed to submit order: ' + e.message)
+    }
     setOrdering(false)
   }
 
@@ -177,13 +205,17 @@ function CustomerOrder() {
             )}
           </div>
 
+          {/* Cart Panel */}
           <div style={{ background: 'white', padding: 20, borderRadius: 16, boxShadow: '0 4px 24px rgba(108,99,255,0.08)', border: '1px solid #e8e8f0', height: 'fit-content', position: window.innerWidth <= 768 ? 'static' : 'sticky', top: 20 }}>
             <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14, color: '#2d3436' }}>
               <FaShoppingCart style={{ marginRight: 8, color: '#6c63ff' }} />Your Order
             </h3>
 
-            <input type="number" placeholder="Table Number"
-              value={tableNo} onChange={e => setTableNo(e.target.value)}
+            <input
+              type="number"
+              placeholder="Table Number"
+              value={tableNo}
+              onChange={e => setTableNo(e.target.value)}
               style={{ width: '100%', padding: '10px 14px', border: '1.5px solid #e8e8f0', borderRadius: 10, fontSize: 14, outline: 'none', marginBottom: 12, boxSizing: 'border-box' }}
             />
 
@@ -223,7 +255,9 @@ function CustomerOrder() {
               💡 Payment at the cashier after your order.
             </div>
 
-            <button onClick={handleCheckout} disabled={ordering || cart.length === 0 || !tableNo}
+            <button
+              onClick={handleCheckout}
+              disabled={ordering || cart.length === 0 || !tableNo}
               style={{ width: '100%', padding: '13px', background: 'linear-gradient(135deg, #6c63ff, #574fd6)', color: 'white', border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700, cursor: (ordering || cart.length === 0 || !tableNo) ? 'not-allowed' : 'pointer', opacity: (ordering || cart.length === 0 || !tableNo) ? 0.6 : 1, boxShadow: '0 8px 20px rgba(108,99,255,0.35)' }}>
               {ordering ? '⏳ Placing Order...' : '✅ Place Order'}
             </button>
