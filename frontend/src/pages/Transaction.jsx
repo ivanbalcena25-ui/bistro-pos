@@ -83,14 +83,12 @@ function Transaction() {
   const [showReprintModal, setShowReprintModal] = useState(false)
   const [reprintTxId, setReprintTxId] = useState('')
 
-  // Cache shift in ref para hindi paulit-ulit mag-fetch
   const activeShiftRef = useRef(null)
 
   const qrRefGCash = useRef(); const qrRefMaya = useRef()
   const qrRefShopeePay = useRef(); const qrRefGrabPay = useRef()
   const qrInputRefs = { GCash: qrRefGCash, Maya: qrRefMaya, ShopeePay: qrRefShopeePay, GrabPay: qrRefGrabPay }
 
-  // ── LOAD FUNCTIONS ──
   const loadMenu = useCallback(async () => {
     setLoadingMenu(true)
     try {
@@ -100,7 +98,6 @@ function Transaction() {
     setLoadingMenu(false)
   }, [])
 
-  // Silent load — hindi nag-reset ng loading state, para sa polling
   const loadTablesSilent = useCallback(async () => {
     try { const d = await getTables(); setTables(Array.isArray(d) ? d : []) } catch {}
   }, [])
@@ -121,21 +118,10 @@ function Transaction() {
     try { const a = await getLowStockAlerts(10); setLowStockAlerts(a) } catch {}
   }, [])
 
-  // ── INITIAL LOAD — parallel fetch ──
   useEffect(() => {
     Promise.all([loadMenu(), loadTablesSilent(), loadTransactions(), loadActiveShift(), loadAlertsSilent()])
-
-    // Poll tables + alerts every 8s (hindi na 5s — less requests)
-    const interval = setInterval(() => {
-      loadTablesSilent()
-      loadAlertsSilent()
-    }, 8000)
-
-    // Poll shift every 30s lang (hindi nagbabago madalas)
-    const shiftInterval = setInterval(() => {
-      loadActiveShift()
-    }, 30000)
-
+    const interval = setInterval(() => { loadTablesSilent(); loadAlertsSilent() }, 8000)
+    const shiftInterval = setInterval(() => { loadActiveShift() }, 30000)
     return () => { clearInterval(interval); clearInterval(shiftInterval) }
   }, [])
 
@@ -162,11 +148,9 @@ function Transaction() {
   }
 
   const addToCart = useCallback(async (item) => {
-    // Use cached shift — walang extra API call
     const currentShift = activeShiftRef.current
     if (!currentShift) { alert('No active shift! Please open a shift first.'); return }
     if (item.status !== 'Available' || (item.stock ?? 0) === 0) return
-
     setCart(prev => {
       const exists = prev.find(c => c.id === item.id)
       const currentQty = exists ? exists.qty : 0
@@ -225,7 +209,6 @@ function Transaction() {
 
   const handleCheckout = async () => {
     setError('')
-    // Use cached shift ref — no extra API call
     const currentShift = activeShiftRef.current
     if (!currentShift) { alert('No active shift!'); return }
     if (!tableNo.trim()) return alert('Please enter table number!')
@@ -242,7 +225,6 @@ function Transaction() {
     const change = paymentMethod === 'Cash' ? getChange() : 0
 
     try {
-      // Fire transaction + kitchen order + table update in parallel
       const [result] = await Promise.all([
         addTransaction({
           customer_name: `Table ${num}`, table_no: num, total,
@@ -259,7 +241,6 @@ function Transaction() {
       setLastTxId(result.id)
       setLastTableNo(num)
 
-      // Kitchen + table update in background — hindi na hinihintay
       Promise.all([
         addKitchenOrder({
           table_no: num, cashier_name: user.username || 'Cashier',
@@ -293,7 +274,6 @@ function Transaction() {
       if (E_WALLETS.includes(paymentMethod)) setShowQRModal(true)
       else setTimeout(() => printReceipt(receiptData, true), 300)
 
-      // Load transactions in background
       loadTransactions()
 
     } catch (e) { setError('Failed to save transaction! ' + e.message) }
