@@ -142,7 +142,10 @@ app.post('/api/menu', auth, adminOnly, async (req, res) => {
 app.put('/api/menu/:id', auth, adminOnly, async (req, res) => {
   try {
     const { name, price, category, image, stock } = req.body
-    const status = (stock ?? 0) <= 0 ? 'Out of Stock' : 'Available'
+    await query(
+  'UPDATE menu_items SET name=$1, price=$2, category=$3, image=$4, stock=$5 WHERE id=$6',
+  [name, price, category, image || null, stock ?? 0, req.params.id]
+)
     await query(
       'UPDATE menu_items SET name=$1, price=$2, category=$3, image=$4, stock=$5, status=$6 WHERE id=$7',
       [name, price, category, image || null, stock ?? 0, status, req.params.id]
