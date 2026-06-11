@@ -591,7 +591,7 @@ function Transaction() {
         style={{ opacity: (tableError || loadingCheckout || !activeShift) ? 0.6 : 1, cursor: !activeShift ? 'not-allowed' : 'pointer' }}>
         {loadingCheckout ? '⏳ Processing...' : <><FaPrint size={14} /> Checkout & Print</>}
       </button>
-      {receipt && (
+      {lastTxId && (
         <button onClick={() => setShowVoidModal(true)} style={{ width: '100%', padding: '11px', background: '#fef2f2', color: '#ef4444', border: '1.5px solid #fca5a5', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
           <FaTimes size={13} /> Void Last Transaction
         </button>
@@ -760,42 +760,6 @@ function Transaction() {
           </div>
         )}
 
-        {receipt && !receipt.voided && (
-  <div className="modal-overlay">
-    <div className="modal" style={{ maxWidth: 420 }}>
-      <h2 style={{ textAlign: 'center' }}>🏨 VS Hotel Bistro</h2>
-      <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Official Receipt</p>
-      <hr />
-      <p><strong>Transaction #:</strong> TXN-{String(receipt.id).padStart(5, '0')}</p>
-      <p><strong>Date:</strong> {receipt.date}</p>
-      <p><strong>Table No:</strong> {receipt.tableNo}</p>
-      <p><strong>Cashier:</strong> {receipt.cashier_name}</p>
-      <p><strong>Payment:</strong> {receipt.payment_method}</p>
-      <hr />
-      {receipt.items.map((s, i) => (
-        <div key={i} style={{ marginBottom: 6 }}>
-          <div className="receipt-item"><span>{s.name} ×{s.qty}</span><span>₱{(s.price * s.qty).toLocaleString()}</span></div>
-          {s.item_discount !== 'None' && <div style={{ fontSize: 12, color: '#10b981', paddingLeft: 8 }}>Discount ({s.item_discount}): -₱{Number(s.item_discount_amount).toFixed(2)}</div>}
-        </div>
-      ))}
-      <hr />
-      <div className="receipt-item" style={{ fontWeight: 700, fontSize: 16 }}><span>Total</span><span>₱{receipt.total.toLocaleString()}</span></div>
-      {receipt.payment_method === 'Cash' && <>
-        <div className="receipt-item"><span>Amount Paid</span><span>₱{receipt.paid.toLocaleString()}</span></div>
-        <div className="receipt-item" style={{ color: '#16a34a', fontWeight: 700 }}><span>Change</span><span>₱{receipt.change.toLocaleString()}</span></div>
-      </>}
-      <hr />
-      <p style={{ textAlign: 'center', fontWeight: 600, fontSize: 14 }}>Thank you for dining with us! 🍽️</p>
-      <div className="form-actions" style={{ marginTop: 12 }}>
-        <button className="btn-primary" onClick={() => printReceipt(receipt, true)} style={{ flex: 1 }}>
-          <FaPrint size={13} /> Print Again
-        </button>
-        <button className="btn-secondary" onClick={() => setReceipt(null)}>✕ Close</button>
-      </div>
-    </div>
-  </div>
-)}
-
         {showSettingsModal && tmpSettings && (
           <div className="modal-overlay">
             <div className="modal" style={{ maxWidth: 540, maxHeight: '85vh', overflowY: 'auto' }}>
@@ -868,7 +832,7 @@ function Transaction() {
           <div className="modal-overlay">
             <div className="modal">
               <h2 style={{ color: '#ef4444' }}>🚫 Void Transaction</h2>
-              <p>Void <strong>#{lastTxId}</strong> (₱{receipt?.total?.toLocaleString()}) and free <strong>Table {lastTableNo}</strong>?</p>
+              <p>Void <strong>#{lastTxId}</strong> and free <strong>Table {lastTableNo}</strong>?</p>
               <div style={{ marginTop: 14 }}>
                 <label style={lbl}>Reason *</label>
                 <input placeholder="e.g. Wrong order..." value={voidReason} onChange={e => setVoidReason(e.target.value)} />
