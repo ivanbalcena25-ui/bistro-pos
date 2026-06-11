@@ -93,7 +93,7 @@ function Transaction() {
     setLoadingMenu(true)
     try {
       const d = await getMenu()
-      setAvailableItems(Array.isArray(d) ? d.filter(i => (i.stock ?? 0) > 0) : [])
+      setAvailableItems(Array.isArray(d) ? d.filter(i => i.status !== 'Unavailable') : [])
     } catch (e) { setError('Failed to load menu: ' + e.message) }
     setLoadingMenu(false)
   }, [])
@@ -740,7 +740,7 @@ function Transaction() {
                   )}
                   {filtered.map(item => {
                     const inCart = cart.find(c => c.id === item.id)
-                    const oos = item.status !== 'Available' || (item.stock ?? 0) === 0
+                    const oos = (item.stock ?? 0) === 0
                     const badge = getStockBadge(item)
                     return (
                       <div key={item.id} onClick={() => !oos && addToCart(item)}
