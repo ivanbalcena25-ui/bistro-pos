@@ -89,17 +89,13 @@ function Transaction() {
   const qrRefShopeePay = useRef(); const qrRefGrabPay = useRef()
   const qrInputRefs = { GCash: qrRefGCash, Maya: qrRefMaya, ShopeePay: qrRefShopeePay, GrabPay: qrRefGrabPay }
 
-  const loadMenu = useCallback(async () => {
+const loadMenu = useCallback(async () => {
     setLoadingMenu(true)
     try {
       const d = await getMenu()
       setAvailableItems(Array.isArray(d) ? d : [])
     } catch (e) { setError('Failed to load menu: ' + e.message) }
     setLoadingMenu(false)
-  }, [])
-
-  const loadTablesSilent = useCallback(async () => {
-    try { const d = await getTables(); setTables(Array.isArray(d) ? d : []) } catch {}
   }, [])
 
   const loadTransactions = useCallback(async () => {
