@@ -93,7 +93,7 @@ function Transaction() {
     setLoadingMenu(true)
     try {
       const d = await getMenu()
-      setAvailableItems(Array.isArray(d) ? d.filter(i => i.status !== 'Unavailable') : [])
+      setAvailableItems(Array.isArray(d) ? d.filter(i => !i.status || i.status === 'Available') : [])
     } catch (e) { setError('Failed to load menu: ' + e.message) }
     setLoadingMenu(false)
   }, [])
@@ -151,17 +151,15 @@ function Transaction() {
     const currentShift = activeShiftRef.current
     if (!currentShift) { alert('No active shift! Please open a shift first.'); return }
     if ((item.stock ?? 0) === 0) return
-    setCart(prev => {
-      const exists = prev.find(c => c.id === item.id)
-      const currentQty = exists ? exists.qty : 0
-      if (currentQty >= (item.stock ?? 999)) { alert(`Only ${item.stock} left in stock!`); return prev }
-      if (exists) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
-      return [...prev, {
-        id: item.id, name: item.name, price: item.price,
-        category: item.category, stock: item.stock, status: item.status,
-        imageUrl: item.image || null, qty: 1, discount: 'None'
-      }]
-    })
+setCart(prev => {
+  const exists = prev.find(c => c.id === item.id)
+  if (exists) return prev.map(c => c.id === item.id ? { ...c, qty: c.qty + 1 } : c)
+  return [...prev, {
+    id: item.id, name: item.name, price: item.price,
+    category: item.category, stock: item.stock, status: item.status,
+    imageUrl: item.image || null, qty: 1, discount: 'None'
+  }]
+})
     if (isMobile) setShowCart(true)
   }, [isMobile])
 
@@ -170,7 +168,6 @@ function Transaction() {
       if (c.id !== id) return c
       const newQty = c.qty + delta
       if (newQty < 1) return c
-      if (newQty > (c.stock ?? 999)) { alert(`Only ${c.stock} left in stock!`); return c }
       return { ...c, qty: newQty }
     }))
   }, [])

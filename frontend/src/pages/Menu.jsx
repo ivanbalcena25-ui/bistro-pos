@@ -98,14 +98,15 @@ function Menu() {
     try {
       if (selectedItem) {
         // EDIT existing item — save then reset to Add mode
-        const updated = {
-          ...selectedItem,
-          name: form.name.trim(),
-          price: Number(form.price),
-          category: form.category,
-          image: form.image,
-          stock: Number(form.stock) || 0
-        }
+const updated = {
+  ...selectedItem,
+  name: form.name.trim(),
+  price: Number(form.price),
+  category: form.category,
+  image: form.image,
+  stock: Number(form.stock) || 0,
+  status: 'Available'   // ← add this
+}
         await updateMenuItem(selectedItem.id, updated)
         setItems(prev => prev.map(i => i.id === selectedItem.id ? updated : i))
         setSuccess('Item updated!')
@@ -114,12 +115,13 @@ function Menu() {
       } else {
         // ADD new item — save then reset form
         const payload = {
-          name: form.name.trim(),
-          price: Number(form.price),
-          category: form.category,
-          image: form.image,
-          stock: Number(form.stock) || 0
-        }
+  name: form.name.trim(),
+  price: Number(form.price),
+  category: form.category,
+  image: form.image,
+  stock: Number(form.stock) || 0,
+  status: 'Available'   // ← add this
+}
         const res = await addMenuItem(payload)
         setItems(prev => [...prev, res])
         setSuccess('Item added!')
