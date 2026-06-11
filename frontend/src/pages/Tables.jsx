@@ -6,7 +6,6 @@ import { getTables, updateTableByNumber } from '../api'
 function Tables() {
   const [tables, setTables] = useState([])
   const [selected, setSelected] = useState(null)
-  const [customerName, setCustomerName] = useState('')
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
 
   useEffect(() => {
@@ -31,11 +30,10 @@ function Tables() {
   }, [])
 
   const handleOccupy = async () => {
-    if (!customerName.trim()) return alert('Please enter guest name!')
     try {
-      await updateTableByNumber(selected.number, { status: 'Occupied', customer: customerName })
+      await updateTableByNumber(selected.number, { status: 'Occupied', customer: '' })
       await loadTables()
-      setSelected(null); setCustomerName('')
+      setSelected(null)
     } catch {
       alert('Failed to update table!')
     }
@@ -56,9 +54,9 @@ function Tables() {
   const occupied  = tables.filter(t => t.status === 'Occupied').length
 
   const stats = [
-    { icon: <FaCheckCircle />, count: available,      label: 'Available',    color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
-    { icon: <FaTimesCircle />, count: occupied,       label: 'Occupied',     color: '#ef4444', bg: '#fef2f2', border: '#fca5a5' },
-    { icon: <FaUserFriends />, count: tables.length,  label: 'Total Tables', color: '#0d9488', bg: '#f0fdfa', border: '#99f6e4' },
+    { icon: <FaCheckCircle />, count: available,     label: 'Available',    color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+    { icon: <FaTimesCircle />, count: occupied,      label: 'Occupied',     color: '#ef4444', bg: '#fef2f2', border: '#fca5a5' },
+    { icon: <FaUserFriends />, count: tables.length, label: 'Total Tables', color: '#0d9488', bg: '#f0fdfa', border: '#99f6e4' },
   ]
 
   return (
@@ -108,7 +106,7 @@ function Tables() {
             return (
               <div
                 key={table.id}
-                onClick={() => { setSelected(table); setCustomerName(table.customer || '') }}
+                onClick={() => setSelected(table)}
                 style={{
                   padding: isMobile ? '16px 10px' : '24px 16px',
                   borderRadius: 14,
@@ -137,21 +135,6 @@ function Tables() {
                 <div style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, color: occ ? '#ef4444' : '#16a34a', marginBottom: 4 }}>
                   {table.status}
                 </div>
-                {table.customer && (
-                  <div style={{
-                    fontSize: isMobile ? 11 : 12,
-                    color: '#64748b',
-                    background: 'rgba(0,0,0,0.05)',
-                    borderRadius: 8,
-                    padding: '3px 8px',
-                    marginTop: 5,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}>
-                    👤 {table.customer}
-                  </div>
-                )}
               </div>
             )
           })}
@@ -168,24 +151,11 @@ function Tables() {
                 <h2 style={{ margin: 0 }}>Table {selected.number}</h2>
               </div>
 
-              <p>
-                Status: <strong>{selected.status}</strong>
-                {selected.customer && ` · Guest: ${selected.customer}`}
-              </p>
+              <p>Status: <strong>{selected.status}</strong></p>
 
               {selected.status === 'Available' ? (
                 <>
-                  <div>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>
-                      Guest Name
-                    </label>
-                    <input
-                      placeholder="Enter guest name"
-                      value={customerName}
-                      onChange={e => setCustomerName(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleOccupy()}
-                    />
-                  </div>
+                  <p>Click <strong>Occupy Table</strong> to mark this table as occupied.</p>
                   <div className="form-actions">
                     <button className="btn-primary" onClick={handleOccupy}>✅ Occupy Table</button>
                     <button className="btn-secondary" onClick={() => setSelected(null)}>Cancel</button>
