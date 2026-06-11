@@ -66,7 +66,8 @@ function CustomerOrder() {
     try {
       const token = user.token || ''
 
-      const payload = {
+      // ── 1. Save transaction ──
+      const txPayload = {
         customer_name: `Table ${tableNo}`,
         table_no: parseInt(tableNo),
         total: getTotal(),
@@ -83,23 +84,28 @@ function CustomerOrder() {
 
       const txRes = await fetch(`${API}/transactions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(txPayload)
       })
 
       const txData = await txRes.json()
-
       if (!txRes.ok) throw new Error(txData.error || 'Failed to submit order')
 
+      // ── 2. Send to kitchen (FIX: dati hindi nagse-send dito) ──
+      await fetch(`${API}/kitchen/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          table_no: parseInt(tableNo),
+          cashier_name: user.username || 'Customer',
+          items: cart.map(i => ({ name: i.name, qty: i.qty, notes: '' }))
+        })
+      })
+
+      // ── 3. Mark table as Occupied ──
       await fetch(`${API}/tables/number/${tableNo}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: 'Occupied', customer: `Table ${tableNo}` })
       })
 

@@ -17,8 +17,16 @@ function Login() {
       const user = await login(form.username, form.password)
       if (user.error) { setError(user.error); setLoading(false); return }
       localStorage.setItem('user', JSON.stringify(user))
-      if (user.role === 'Admin' || user.role === 'Supervisor' || user.role === 'Manager') navigate('/dashboard')
-      else navigate('/transaction')
+
+      // FIX: Supervisor at Manager ay dapat mapunta sa /dashboard din
+      if (['Admin', 'Supervisor', 'Manager'].includes(user.role)) {
+        navigate('/dashboard')
+      } else if (user.role === 'Kitchen') {
+        navigate('/kitchen')
+      } else {
+        // Cashier at iba pa
+        navigate('/transaction')
+      }
     } catch {
       setError('Cannot connect to server!')
     }

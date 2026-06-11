@@ -122,10 +122,19 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
 app.get('/api/menu', auth, async (req, res) => {
   try {
     const [rows] = await query(
-      "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status IS NULL OR status = 'Available' ORDER BY category, name ASC"
+      "SELECT id, name, price, category, status, stock, image, unit, reorder_level FROM menu_items WHERE status IS NULL OR status = 'Available' ORDER BY category, name ASC"
     )
     const normalized = rows.map(r => ({ ...r, status: r.status || 'Available' }))
     res.json(normalized)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.get('/api/menu/all', auth, adminOnly, async (req, res) => {
+  try {
+    const [rows] = await query(
+      'SELECT id, name, price, category, status, stock, image, unit, reorder_level FROM menu_items ORDER BY category, name ASC'
+    )
+    res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
@@ -309,10 +318,35 @@ app.post('/api/transactions', auth, async (req, res) => {
       )
 
       if (itemId && itemId > 0) {
+        // Get previous stock before deduction
+        const stockRes = await client.query('SELECT stock FROM menu_items WHERE id = $1', [itemId])
+        const prevStock = stockRes.rows[0]?.stock ?? 0
+        const newStock = Math.max(prevStock - itemQty, 0)
+
         await client.query(
-          'UPDATE menu_items SET stock = GREATEST(stock - $1, 0) WHERE id = $2',
-          [itemQty, itemId]
+          'UPDATE menu_items SET stock = $1 WHERE id = $2',
+          [newStock, itemId]
         )
+
+        // Record inventory movement
+        await client.query(
+          `INSERT INTO inventory_movements
+            (product_id, product_name, movement_type, quantity, previous_stock, new_stock, reference, reason, created_by)
+           VALUES ($1,$2,'Sale',$3,$4,$5,$6,'Sold via transaction',$7)`,
+          [itemId, itemName, itemQty, prevStock, newStock, `TXN-${transactionId}`, cashier_name || 'Cashier']
+        )
+
+        // Check if stock is at or below reorder level — insert stock alert if needed
+        const [menuRow] = await client.query('SELECT reorder_level FROM menu_items WHERE id = $1', [itemId])
+        const reorderLevel = menuRow.rows[0]?.reorder_level ?? 5
+        if (newStock <= reorderLevel) {
+          await client.query(
+            `INSERT INTO stock_alerts (product_id, product_name, current_stock, reorder_level, status)
+             VALUES ($1,$2,$3,$4,'Pending')
+             ON CONFLICT DO NOTHING`,
+            [itemId, itemName, newStock, reorderLevel]
+          )
+        }
       }
     }
 
@@ -480,7 +514,7 @@ app.get('/api/alerts/low-stock', auth, async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 10
     const [rows] = await query(
-      `SELECT id, name, category, stock,
+      `SELECT id, name, category, stock, reorder_level,
         CASE WHEN stock = 0 THEN 'out' ELSE 'low' END AS alert_type
        FROM menu_items
        WHERE stock <= $1 AND (status IS NULL OR status = 'Available')
@@ -491,6 +525,133 @@ app.get('/api/alerts/low-stock', auth, async (req, res) => {
       lowStock: rows.filter(r => r.alert_type === 'low' && r.stock > 0),
       outOfStock: rows.filter(r => r.alert_type === 'out')
     })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// ── INVENTORY MOVEMENTS ──
+app.get('/api/inventory/movements', auth, adminOnly, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100
+    const product_id = req.query.product_id
+    let sql = 'SELECT * FROM inventory_movements'
+    let params = []
+    if (product_id) {
+      sql += ' WHERE product_id = $1'
+      params.push(product_id)
+    }
+    sql += ' ORDER BY created_at DESC LIMIT $' + (params.length + 1)
+    params.push(limit)
+    const [rows] = await query(sql, params)
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// Manual stock adjustment — nagre-record sa inventory_movements
+app.post('/api/inventory/adjust', auth, adminOnly, async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { product_id, quantity, movement_type, reason } = req.body
+    // movement_type: 'Restock' | 'Adjustment' | 'Waste' | 'Return'
+
+    const stockRes = await client.query('SELECT stock, name FROM menu_items WHERE id = $1', [product_id])
+    if (!stockRes.rows.length) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ error: 'Product not found' })
+    }
+
+    const { stock: prevStock, name: productName } = stockRes.rows[0]
+    const qty = parseInt(quantity)
+
+    // Restock/Return = dagdag; Waste/Adjustment = bawas (negative qty)
+    const newStock = Math.max(prevStock + qty, 0)
+
+    await client.query(
+      'UPDATE menu_items SET stock = $1, updated_at = NOW() WHERE id = $2',
+      [newStock, product_id]
+    )
+
+    await client.query(
+      `INSERT INTO inventory_movements
+        (product_id, product_name, movement_type, quantity, previous_stock, new_stock, reason, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [product_id, productName, movement_type || 'Adjustment', Math.abs(qty), prevStock, newStock, reason || '', req.user.username]
+    )
+
+    // Check reorder level after adjustment
+    const [menuRow] = await client.query('SELECT reorder_level FROM menu_items WHERE id = $1', [product_id])
+    const reorderLevel = menuRow.rows[0]?.reorder_level ?? 5
+    if (newStock <= reorderLevel) {
+      await client.query(
+        `INSERT INTO stock_alerts (product_id, product_name, current_stock, reorder_level, status)
+         VALUES ($1,$2,$3,$4,'Pending')
+         ON CONFLICT DO NOTHING`,
+        [product_id, productName, newStock, reorderLevel]
+      )
+    }
+
+    await client.query('COMMIT')
+    res.json({ success: true, newStock, prevStock })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    res.status(500).json({ error: err.message })
+  } finally {
+    client.release()
+  }
+})
+
+// ── STOCK ALERTS ──
+app.get('/api/stock-alerts', auth, adminOnly, async (req, res) => {
+  try {
+    const [rows] = await query(
+      "SELECT * FROM stock_alerts ORDER BY created_at DESC LIMIT 100"
+    )
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.put('/api/stock-alerts/:id/resolve', auth, adminOnly, async (req, res) => {
+  try {
+    await query("UPDATE stock_alerts SET status='Resolved' WHERE id=$1", [req.params.id])
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// ── SUPPLIERS ──
+app.get('/api/suppliers', auth, adminOnly, async (req, res) => {
+  try {
+    const [rows] = await query("SELECT * FROM suppliers ORDER BY name ASC")
+    res.json(rows)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.post('/api/suppliers', auth, adminOnly, async (req, res) => {
+  try {
+    const { name, contact_person, email, phone, address } = req.body
+    if (!name) return res.status(400).json({ error: 'Supplier name is required' })
+    const [rows] = await query(
+      "INSERT INTO suppliers (name, contact_person, email, phone, address, status) VALUES ($1,$2,$3,$4,$5,'Active') RETURNING *",
+      [name, contact_person || '', email || '', phone || '', address || '']
+    )
+    res.json(rows[0])
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.put('/api/suppliers/:id', auth, adminOnly, async (req, res) => {
+  try {
+    const { name, contact_person, email, phone, address, status } = req.body
+    await query(
+      'UPDATE suppliers SET name=$1, contact_person=$2, email=$3, phone=$4, address=$5, status=$6 WHERE id=$7',
+      [name, contact_person || '', email || '', phone || '', address || '', status || 'Active', req.params.id]
+    )
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.delete('/api/suppliers/:id', auth, adminOnly, async (req, res) => {
+  try {
+    await query('DELETE FROM suppliers WHERE id = $1', [req.params.id])
+    res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

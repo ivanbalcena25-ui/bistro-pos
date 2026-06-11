@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 const navItems = [
-  { path: '/dashboard',   label: 'Dashboard',  icon: '📊', roles: ['Admin'] },
+  { path: '/dashboard',   label: 'Dashboard',  icon: '📊', roles: ['Admin', 'Supervisor', 'Manager'] },
   { path: '/transaction', label: 'Transaction', icon: '💳', roles: ['Admin', 'Cashier'] },
   { path: '/kitchen',     label: 'Kitchen',     icon: '🍳', roles: ['Admin', 'Kitchen'] },
   { path: '/tables',      label: 'Tables',      icon: '🪑', roles: ['Admin', 'Cashier'] },
   { path: '/menu',        label: 'Menu',        icon: '🍽️', roles: ['Admin'] },
-  { path: '/reports',     label: 'Reports',     icon: '📈', roles: ['Admin'] },
+  // FIX: Supervisor at Manager ay makakakita ng Reports
+  { path: '/reports',     label: 'Reports',     icon: '📈', roles: ['Admin', 'Supervisor', 'Manager'] },
   { path: '/users',       label: 'Users',       icon: '👥', roles: ['Admin'] },
 ]
 
@@ -143,7 +144,7 @@ function Navbar() {
           <div style={{ padding: '12px 10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 4px' }}>
               <span style={{ fontSize: 18 }}>
-                {user.role === 'Admin' ? '👑' : user.role === 'Cashier' ? '🧑‍💼' : '🍳'}
+                {user.role === 'Admin' ? '👑' : user.role === 'Cashier' ? '🧑‍💼' : user.role === 'Kitchen' ? '🍳' : '📊'}
               </span>
               <div>
                 <div style={{ color: 'white', fontSize: 13, fontWeight: 700 }}>{user.username}</div>

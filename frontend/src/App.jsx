@@ -28,9 +28,9 @@ function App() {
           </ProtectedRoute>
         } />
 
-        {/* Admin only */}
+        {/* FIX: Dinagdag ang Supervisor at Manager para hindi mag-redirect loop */}
         <Route path="/dashboard" element={
-          <ProtectedRoute allowedRoles={['Admin']}>
+          <ProtectedRoute allowedRoles={['Admin', 'Supervisor', 'Manager']}>
             <Dashboard />
           </ProtectedRoute>
         } />
@@ -40,7 +40,7 @@ function App() {
           </ProtectedRoute>
         } />
         <Route path="/reports" element={
-          <ProtectedRoute allowedRoles={['Admin']}>
+          <ProtectedRoute allowedRoles={['Admin', 'Supervisor', 'Manager']}>
             <Reports />
           </ProtectedRoute>
         } />
