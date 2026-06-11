@@ -118,6 +118,7 @@ app.delete('/api/users/:id', auth, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// ── MENU ──
 app.get('/api/menu', auth, async (req, res) => {
   try {
     const [rows] = await query(
@@ -142,7 +143,6 @@ app.post('/api/menu', auth, adminOnly, async (req, res) => {
 app.put('/api/menu/:id', auth, adminOnly, async (req, res) => {
   try {
     const { name, price, category, image, stock, status } = req.body
-    // ✅ FIX: Single query, status defaults to 'Available' if not provided
     await query(
       'UPDATE menu_items SET name=$1, price=$2, category=$3, image=$4, stock=$5, status=$6, updated_at=NOW() WHERE id=$7',
       [name, price, category, image || null, stock ?? 0, status || 'Available', req.params.id]
@@ -159,13 +159,10 @@ app.delete('/api/menu/:id', auth, adminOnly, async (req, res) => {
 })
 
 // ── TABLES ──
-app.get('/api/menu', auth, async (req, res) => {
+app.get('/api/tables', auth, async (req, res) => {
   try {
-    const [rows] = await query(
-      "SELECT id, name, price, category, status, stock, image FROM menu_items WHERE status = 'Available' OR status IS NULL ORDER BY category, name ASC"
-    )
-    const normalized = rows.map(r => ({ ...r, status: r.status || 'Available' }))
-    res.json(normalized)
+    const [rows] = await query('SELECT * FROM tables_list ORDER BY number ASC')
+    res.json(rows)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
