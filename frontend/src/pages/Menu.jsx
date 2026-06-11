@@ -23,7 +23,7 @@ function Menu() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [saving, setSaving] = useState(false)
-  const [panelOpen, setPanelOpen] = useState(true)
+  const [panelOpen, setPanelOpen] = useState(false)
   const fileRef = useRef()
 
   useEffect(() => { loadMenu() }, [])
@@ -97,31 +97,29 @@ function Menu() {
     setSaving(true)
     try {
       if (selectedItem) {
-        // EDIT existing item — save then reset to Add mode
-const updated = {
-  ...selectedItem,
-  name: form.name.trim(),
-  price: Number(form.price),
-  category: form.category,
-  image: form.image,
-  stock: Number(form.stock) || 0,
-  status: 'Available'   // ← add this
-}
+        const updated = {
+          ...selectedItem,
+          name: form.name.trim(),
+          price: Number(form.price),
+          category: form.category,
+          image: form.image,
+          stock: Number(form.stock) || 0,
+          status: 'Available'
+        }
         await updateMenuItem(selectedItem.id, updated)
         setItems(prev => prev.map(i => i.id === selectedItem.id ? updated : i))
         setSuccess('Item updated!')
         resetToAddMode()
         setTimeout(() => setSuccess(''), 2000)
       } else {
-        // ADD new item — save then reset form
         const payload = {
-  name: form.name.trim(),
-  price: Number(form.price),
-  category: form.category,
-  image: form.image,
-  stock: Number(form.stock) || 0,
-  status: 'Available'   // ← add this
-}
+          name: form.name.trim(),
+          price: Number(form.price),
+          category: form.category,
+          image: form.image,
+          stock: Number(form.stock) || 0,
+          status: 'Available'
+        }
         const res = await addMenuItem(payload)
         setItems(prev => [...prev, res])
         setSuccess('Item added!')
@@ -189,7 +187,7 @@ const updated = {
             </div>
           </div>
           <button className="btn-primary" onClick={handleAddNew}>
-            <FaPlus size={13} /> Add Item
+            <FaPlus size={13} /> Edit Items
           </button>
         </div>
 
@@ -254,13 +252,14 @@ const updated = {
                   return (
                     <div
                       key={item.id}
-                      onClick={() => handleSelectItem(item)}
+                      onClick={() => panelOpen && handleSelectItem(item)}
                       style={{
                         background: 'white', borderRadius: 14,
                         border: isSelected ? '2.5px solid #16a34a' : `1px solid ${oos ? '#fca5a5' : '#e2e8f0'}`,
                         overflow: 'hidden',
                         boxShadow: isSelected ? '0 0 0 4px rgba(22,163,74,0.12)' : '0 1px 4px rgba(0,0,0,0.06)',
-                        transition: 'all 0.18s', cursor: 'pointer',
+                        transition: 'all 0.18s',
+                        cursor: panelOpen ? 'pointer' : 'default',
                         opacity: oos ? 0.80 : 1, position: 'relative',
                       }}
                       onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.10)' } }}
@@ -321,7 +320,6 @@ const updated = {
                 {success && <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#059669', padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600 }}>✅ {success}</div>}
                 {error && <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', color: '#ef4444', padding: '10px 14px', borderRadius: 10, fontSize: 13 }}>⚠️ {error}</div>}
 
-                {/* Photo */}
                 <div>
                   <label style={lbl}>Photo</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
