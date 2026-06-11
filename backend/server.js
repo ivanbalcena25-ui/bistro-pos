@@ -166,6 +166,25 @@ app.get('/api/tables', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+app.post('/api/tables', auth, adminOnly, async (req, res) => {
+  try {
+    const [existing] = await query('SELECT MAX(number) AS max FROM tables_list')
+    const nextNumber = (existing[0].max || 0) + 1
+    const [rows] = await query(
+      "INSERT INTO tables_list (number, status, capacity) VALUES ($1, 'Available', 4) RETURNING *",
+      [nextNumber]
+    )
+    res.json(rows[0])
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+app.delete('/api/tables/:id', auth, adminOnly, async (req, res) => {
+  try {
+    await query('DELETE FROM tables_list WHERE id = $1', [req.params.id])
+    res.json({ success: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 app.put('/api/tables/number/:number', auth, async (req, res) => {
   try {
     const { status, customer } = req.body
