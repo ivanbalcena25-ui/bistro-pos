@@ -190,6 +190,9 @@ app.put('/api/tables/:id', auth, async (req, res) => {
 
 // ── TRANSACTIONS ──
 app.get('/api/transactions', auth, async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+  res.set('Pragma', 'no-cache')
+  res.set('Expires', '0')
   try {
     const [rows] = await query(`
       SELECT
@@ -244,7 +247,6 @@ app.get('/api/transactions/:id', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
-// ✅ FIXED: POST /api/transactions - ginamit for...of para safe ang stock deduction
 app.post('/api/transactions', auth, async (req, res) => {
   const client = await pool.connect()
   try {
@@ -276,7 +278,6 @@ app.post('/api/transactions', auth, async (req, res) => {
     )
     const transactionId = result.rows[0].id
 
-    // ✅ FIXED: for...of instead of Promise.all para guaranteed sequential at nasa loob ng transaction
     for (const item of items) {
       const itemName = String(item.name || '').trim()
       const itemPrice = Number(item.price) || 0

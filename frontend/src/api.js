@@ -41,7 +41,7 @@ export const getTables = () => fetch(`${API}/tables`, { headers: authHeaders() }
 export const updateTable = (id, data) => fetch(`${API}/tables/${id}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
 export const updateTableByNumber = (number, data) => fetch(`${API}/tables/number/${number}`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
 
-export const getTransactions = () => fetch(`${API}/transactions`, { headers: authHeaders() }).then(handleResponse)
+export const getTransactions = () => fetch(`${API}/transactions?_=${Date.now()}`, { headers: authHeaders() }).then(handleResponse)
 export const addTransaction = (data) => fetch(`${API}/transactions`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
 export const voidTransaction = (id, data) => fetch(`${API}/transactions/${id}/void`, { method: 'PUT', headers: authHeaders(), body: JSON.stringify(data) }).then(handleResponse)
 export const clearTransactions = () => fetch(`${API}/transactions`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse)

@@ -88,10 +88,9 @@ function Reports() {
     setLoading(false)
   }
 
-  // ✅ Auto-refresh every 5 seconds para automatic na lalabas ang bagong transactions
   useEffect(() => {
     loadData()
-    const interval = setInterval(loadData, 5000)
+    const interval = setInterval(loadData, 3000)
     return () => clearInterval(interval)
   }, [])
 
@@ -125,7 +124,7 @@ function Reports() {
       }
       const passCashier = cashierFilter === 'All' || t.cashier_name === cashierFilter
       return passTime && passCashier
-    }).reverse()
+    })
   }
 
   const getFilteredStats = (list) => {
@@ -264,7 +263,7 @@ function Reports() {
         <div className="page-header">
           <div>
             <h1>Reports</h1>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>🔄 Auto-refreshes every 5 seconds</p>
+            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>🔄 Auto-refreshes every 3 seconds</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn-primary" onClick={loadData} style={{ background: '#f8fafc', color: '#475569', border: '1.5px solid #e2e8f0', boxShadow: 'none' }}>
