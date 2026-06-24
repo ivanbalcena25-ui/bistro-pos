@@ -1,67 +1,147 @@
-import { useState, useEffect } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-
-const navItems = [
-  { path: '/dashboard', label: 'Dashboard', roles: ['Admin', 'Supervisor', 'Manager'] },
-  { path: '/transaction', label: 'Transaction', roles: ['Admin', 'Cashier'] },
-  { path: '/kitchen', label: 'Kitchen', roles: ['Admin', 'Kitchen'] },
-  { path: '/tables', label: 'Tables', roles: ['Admin', 'Cashier'] },
-  { path: '/menu', label: 'Menu', roles: ['Admin'] },
-  { path: '/reports', label: 'Reports', roles: ['Admin', 'Supervisor', 'Manager'] },
-  { path: '/users', label: 'Users', roles: ['Admin'] },
-]
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 function Navbar() {
-  const location = useLocation()
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('user') || '{}')
-  const [showLogoutModal, setShowLogoutModal] = useState(false)
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  const [showLogout, setShowLogout] = useState(false)
 
   const handleLogout = () => {
     localStorage.removeItem('user')
     navigate('/login')
   }
 
-  const visibleItems = navItems.filter(item => item.roles.includes(user.role))
+  const menuItems = [
+    { label: 'Dashboard', path: '/dashboard' },
+    { label: 'Menu', path: '/menu' },
+    { label: 'Orders', path: '/transaction' },
+    { label: 'Tables', path: '/tables' },
+    { label: 'Reports', path: '/reports' },
+    { label: 'Users', path: '/users' },
+  ]
 
   return (
-    <>
-      {/* LOGOUT CONFIRM MODAL */}
-      {showLogoutModal && (
+    <aside style={{
+      width: '240px',
+      background: '#ffffff',
+      borderRight: '1px solid #e2e8f0',
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      overflowY: 'auto',
+      position: 'fixed',
+      left: 0,
+      top: 0
+    }}>
+      {/* Logo */}
+      <div style={{
+        padding: '24px 20px',
+        borderBottom: '1px solid #e2e8f0'
+      }}>
+        <div style={{ color: '#64748b', fontSize: '11px', fontWeight: '700', letterSpacing: '2px', marginBottom: '8px' }}>
+          VS HOTEL
+        </div>
+        <div style={{ color: '#16a34a', fontSize: '22px', fontWeight: '900', letterSpacing: '2px' }}>
+          BISTRO
+        </div>
+      </div>
+
+      {/* Menu Items */}
+      <nav style={{ flex: 1, padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+        {menuItems.map((item) => (
+          <button
+            key={item.path}
+            onClick={() => navigate(item.path)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '11px 13px',
+              borderRadius: '10px',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#64748b',
+              fontSize: '14px',
+              fontWeight: '500',
+              textAlign: 'left',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.target.style.background = '#f8fafc' }}
+            onMouseLeave={(e) => { e.target.style.background = 'transparent' }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* User Section */}
+      <div style={{ padding: '12px 10px', borderTop: '1px solid #e2e8f0' }}>
+        <div style={{ padding: '0 4px', marginBottom: '10px' }}>
+          <div style={{ color: '#0f172a', fontSize: '13px', fontWeight: '700' }}>
+            {user.username || 'User'}
+          </div>
+          <div style={{ color: '#94a3b8', fontSize: '11px' }}>
+            {user.role || 'Guest'}
+          </div>
+        </div>
+        <button
+          onClick={() => setShowLogout(true)}
+          style={{
+            width: '100%',
+            padding: '9px',
+            background: '#fef2f2',
+            color: '#ef4444',
+            border: '1px solid #fecaca',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '12px',
+            fontWeight: '600'
+          }}
+        >
+          Logout
+        </button>
+      </div>
+
+      {/* Logout Modal */}
+      {showLogout && (
         <div style={{
-          position: fixed, top: 0, left: 0, width: 100%, height: 100%,
-          background: rgba(15,23,42,0.55), backdropFilter: blur(6px),
-          display: flex, justifyContent: center, alignItems: center,
-          zIndex: 9999, padding: 16,
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15,23,42,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
         }}>
           <div style={{
-            background: white, borderRadius: 20, padding: 32px 28px,
-            width: 100%, maxWidth: 360,
-            boxShadow: 0 20px 60px rgba(0,0,0,0.2),
-            border: 1px solid #d1fae5,
-            display: flex, flexDirection: column, alignItems: center, gap: 16,
-            textAlign: center,
+            background: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            boxShadow: '0 20px 25px rgba(0,0,0,0.15)',
+            maxWidth: '400px'
           }}>
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
-              Logout Confirmation
+            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#0f172a', margin: '0 0 12px 0' }}>
+              Confirm Logout
             </h2>
-            <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6 }}>
-              Are you sure you want to logout?<br />
-              <strong style={{ color: '#0f172a' }}>{user.username}</strong> will be signed out.
+            <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 20px 0' }}>
+              Are you sure you want to logout?
             </p>
-            <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <button
-                onClick={() => setShowLogoutModal(false)}
+                onClick={() => setShowLogout(false)}
                 style={{
-                  flex: 1, padding: 12, background: '#f0fdf4', color: '#475569',
-                  border: '1.5px solid #d1fae5', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 600,
+                  flex: 1,
+                  padding: '10px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#475569'
                 }}
               >
                 Cancel
@@ -69,85 +149,24 @@ function Navbar() {
               <button
                 onClick={handleLogout}
                 style={{
-                  flex: 1, padding: 12, background: '#ef4444', color: 'white', 
-                  border: 'none', borderRadius: 12, cursor: 'pointer', fontSize: 14, fontWeight: 600,
-                  boxShadow: '0 4px 12px rgba(239,68,68,0.35)',
+                  flex: 1,
+                  padding: '10px',
+                  background: '#ef4444',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: 'white'
                 }}
               >
-                Yes, Logout
+                Logout
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* DESKTOP SIDEBAR */}
-      {!isMobile && (
-        <aside style={{
-          width: 240, minHeight: '100vh', background: '#ffffff', 
-          borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column',
-          flexShrink: 0, position: 'sticky', top: 0,
-          height: '100vh', overflowY: 'auto',
-        }}>
-
-          {/* LOGO */}
-          <div style={{
-            padding: '24px 20px 20px', borderBottom: '1px solid #e2e8f0',
-            display: 'flex', flexDirection: 'column', gap: 4,
-          }}>
-            <div style={{
-              color: '#64748b', fontSize: 11, fontWeight: 700,
-              letterSpacing: '2px', textTransform: 'uppercase', lineHeight: 1,
-            }}>
-              VS HOTEL
-            </div>
-            <div style={{
-              color: '#16a34a', fontSize: 22, fontWeight: 900,
-              letterSpacing: '3px', lineHeight: 1.1, textTransform: 'uppercase',
-            }}>
-              BISTRO
-            </div>
-          </div>
-
-          {/* Nav Links */}
-          <nav style={{ flex: 1, padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {visibleItems.map(item => {
-              const isActive = location.pathname === item.path
-              return (
-                <Link key={item.path} to={item.path} style={{
-                  display: 'flex', alignItems: 'center', padding: '11px 13px', 
-                  borderRadius: 10, textDecoration: 'none', transition: 'all 0.15s',
-                  background: isActive ? '#f0fdf4' : 'transparent',
-                  color: isActive ? '#16a34a' : '#64748b', fontWeight: isActive ? 700 : 500, fontSize: 14,
-                  borderLeft: isActive ? '3px solid #16a34a' : '3px solid transparent',
-                }}>
-                  {item.label}
-                </Link>
-              )
-            })}
-          </nav>
-
-          {/* User + Logout */}
-          <div style={{ padding: '12px 10px', borderTop: '1px solid #e2e8f0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '0 4px' }}>
-              <div>
-                <div style={{ color: '#0f172a', fontSize: 13, fontWeight: 700 }}>{user.username}</div>
-                <div style={{ color: '#94a3b8', fontSize: 11 }}>{user.role}</div>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowLogoutModal(true)}
-              style={{
-                width: '100%', padding: 9, background: '#fef2f2', color: '#ef4444',
-                border: '1px solid #fecaca', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 600,
-              }}
-            >
-              Logout
-            </button>
-          </div>
-        </aside>
-      )}
-    </>
+    </aside>
   )
 }
 

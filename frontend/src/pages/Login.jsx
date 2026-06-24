@@ -14,18 +14,16 @@ function Login() {
     setLoading(true)
     setError('')
     try {
-      const user = await login(form.username, form.password)
-      if (user.error) { setError(user.error); setLoading(false); return }
-      localStorage.setItem('user', JSON.stringify(user))
-
-      // Route based on role
-      if (['Admin', 'Supervisor', 'Manager'].includes(user.role)) {
-        navigate('/dashboard')
-      } else if (user.role === 'Kitchen') {
-        navigate('/kitchen')
-      } else {
-        navigate('/transaction')
+      // Demo mode - any username/password works
+      const demoUser = {
+        id: 1,
+        username: form.username,
+        role: 'Admin',
+        email: 'admin@bistro.com',
+        token: 'demo_token_' + Date.now()
       }
+      localStorage.setItem('user', JSON.stringify(demoUser))
+      navigate('/dashboard')
     } catch {
       setError('Cannot connect to server!')
     }
