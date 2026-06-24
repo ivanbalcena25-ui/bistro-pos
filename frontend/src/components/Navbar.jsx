@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 const navItems = [
-  { path: '/dashboard',   label: 'Dashboard',  icon: '📊', roles: ['Admin', 'Supervisor', 'Manager'] },
-  { path: '/transaction', label: 'Transaction', icon: '💳', roles: ['Admin', 'Cashier'] },
-  { path: '/kitchen',     label: 'Kitchen',     icon: '🍳', roles: ['Admin', 'Kitchen'] },
-  { path: '/tables',      label: 'Tables',      icon: '🪑', roles: ['Admin', 'Cashier'] },
-  { path: '/menu',        label: 'Menu',        icon: '🍽️', roles: ['Admin'] },
-  { path: '/reports',     label: 'Reports',     icon: '📈', roles: ['Admin', 'Supervisor', 'Manager'] },
-  { path: '/users',       label: 'Users',       icon: '👥', roles: ['Admin'] },
+  { path: '/dashboard',   label: 'Dashboard',  roles: ['Admin', 'Supervisor', 'Manager'] },
+  { path: '/transaction', label: 'Transaction', roles: ['Admin', 'Cashier'] },
+  { path: '/kitchen',     label: 'Kitchen',     roles: ['Admin', 'Kitchen'] },
+  { path: '/tables',      label: 'Tables',      roles: ['Admin', 'Cashier'] },
+  { path: '/menu',        label: 'Menu',        roles: ['Admin'] },
+  { path: '/reports',     label: 'Reports',     roles: ['Admin', 'Supervisor', 'Manager'] },
+  { path: '/users',       label: 'Users',       roles: ['Admin'] },
 ]
 
 function Navbar() {
@@ -49,16 +49,13 @@ function Navbar() {
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: 52 }}>🚪</div>
-            <div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
-                Logout Confirmation
-              </h2>
-              <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6 }}>
-                Are you sure you want to logout?<br />
-                <strong style={{ color: '#0f172a' }}>{user.username}</strong> will be signed out.
-              </p>
-            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+              Logout Confirmation
+            </h2>
+            <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6 }}>
+              Are you sure you want to logout?<br />
+              <strong style={{ color: '#0f172a' }}>{user.username}</strong> will be signed out.
+            </p>
             <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 4 }}>
               <button
                 onClick={() => setShowLogoutModal(false)}
@@ -71,7 +68,7 @@ function Navbar() {
                 onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
                 onMouseLeave={e => e.currentTarget.style.background = '#f0fdf4'}
               >
-                ✕ Cancel
+                Cancel
               </button>
               <button
                 onClick={handleLogout}
@@ -85,7 +82,7 @@ function Navbar() {
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}
               >
-                🚪 Yes, Logout
+                Yes, Logout
               </button>
             </div>
           </div>
@@ -103,34 +100,31 @@ function Navbar() {
           height: '100vh', overflowY: 'auto',
         }}>
 
-          {/* ── LOGO ── */}
+          {/* LOGO */}
           <div style={{
             padding: '24px 20px 20px',
             borderBottom: '1px solid rgba(255,255,255,0.1)',
-            display: 'flex', alignItems: 'center', gap: 14,
+            display: 'flex', flexDirection: 'column', gap: 4,
           }}>
-            <span style={{ fontSize: 36, lineHeight: 1, flexShrink: 0 }}>🏨</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <div style={{
-                color: 'rgba(255,255,255,0.65)',
-                fontSize: 11,
-                fontWeight: 800,
-                letterSpacing: '3px',
-                textTransform: 'uppercase',
-                lineHeight: 1,
-              }}>
-                VS HOTEL
-              </div>
-              <div style={{
-                color: '#4ade80',
-                fontSize: 20,
-                fontWeight: 900,
-                letterSpacing: '4px',
-                lineHeight: 1.1,
-                textTransform: 'uppercase',
-              }}>
-                BISTRO
-              </div>
+            <div style={{
+              color: 'rgba(255,255,255,0.65)',
+              fontSize: 12,
+              fontWeight: 800,
+              letterSpacing: '4px',
+              textTransform: 'uppercase',
+              lineHeight: 1,
+            }}>
+              VS HOTEL
+            </div>
+            <div style={{
+              color: '#4ade80',
+              fontSize: 26,
+              fontWeight: 900,
+              letterSpacing: '5px',
+              lineHeight: 1.1,
+              textTransform: 'uppercase',
+            }}>
+              BISTRO
             </div>
           </div>
 
@@ -140,18 +134,17 @@ function Navbar() {
               const isActive = location.pathname === item.path
               return (
                 <Link key={item.path} to={item.path} style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
+                  display: 'flex', alignItems: 'center',
                   padding: '11px 13px', borderRadius: 10, textDecoration: 'none',
                   background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
                   color: isActive ? 'white' : 'rgba(255,255,255,0.65)',
-                  fontWeight: isActive ? 700 : 500, fontSize: 13.5,
+                  fontWeight: isActive ? 700 : 500, fontSize: 14,
                   transition: 'all 0.15s',
                   borderLeft: isActive ? '3px solid #4ade80' : '3px solid transparent',
                 }}
                   onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
                 >
-                  <span style={{ fontSize: 17 }}>{item.icon}</span>
                   {item.label}
                 </Link>
               )
@@ -161,9 +154,6 @@ function Navbar() {
           {/* User + Logout */}
           <div style={{ padding: '12px 10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '0 4px' }}>
-              <span style={{ fontSize: 20 }}>
-                {user.role === 'Admin' ? '👑' : user.role === 'Cashier' ? '🧑‍💼' : user.role === 'Kitchen' ? '🍳' : '📊'}
-              </span>
               <div>
                 <div style={{ color: 'white', fontSize: 13, fontWeight: 700 }}>{user.username}</div>
                 <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>{user.role}</div>
@@ -180,7 +170,7 @@ function Navbar() {
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.25)'}
               onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.15)'}
             >
-              🚪 Logout
+              Logout
             </button>
           </div>
         </aside>
@@ -193,7 +183,6 @@ function Navbar() {
           return (
             <Link key={item.path} to={item.path} className={isActive ? 'active' : ''}
               style={{ flexShrink: 0, minWidth: 56 }}>
-              <span className="icon">{item.icon}</span>
               {item.label}
             </Link>
           )
@@ -207,7 +196,6 @@ function Navbar() {
             flexShrink: 0, minWidth: 56, padding: '5px 4px',
           }}
         >
-          <span style={{ fontSize: 18 }}>🚪</span>
           Logout
         </button>
       </nav>
