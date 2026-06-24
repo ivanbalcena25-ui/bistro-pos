@@ -1,7 +1,7 @@
-import { useState, useEffect } from react
+import { useState, useEffect } from 'react
 import Navbar from ../components/Navbar
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from recharts
-import { getTransactions } from ../api
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts
+import { getTransactions } from '../api'
 
 function Dashboard() {
   const user = JSON.parse(localStorage.getItem(user) || {})

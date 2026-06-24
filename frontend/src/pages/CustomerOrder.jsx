@@ -1,6 +1,6 @@
-import { useState, useEffect } from react
-import { useNavigate } from react-router-dom
-import { FaPlus, FaTrash, FaShoppingCart, FaSignOutAlt } from react-icons/fa
+import { useState, useEffect } from 'react
+import { useNavigate } from 'react-router-dom
+import { FaPlus, FaTrash, FaShoppingCart, FaSignOutAlt } from 'react-icons/fa
 
 const categories = [Coffee, Non-Coffee, Beer, Pulutan]
 const categoryIcons = { Coffee: , Non-Coffee: , Beer: , Pulutan:  }

@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from react
+import { useState, useEffect, useRef, useCallback } from 'react
 import Navbar from ../components/Navbar
-import { getKitchenOrders, updateKitchenOrderStatus } from ../api
+import { getKitchenOrders, updateKitchenOrderStatus } from '../api'
 
 const STATUS_CONFIG = {
   Pending:   { color: #ef4444, bg: #fef2f2, border: #fca5a5, next: Preparing, nextLabel: 👨‍🍳 Start Cooking, icon: 🆕 },

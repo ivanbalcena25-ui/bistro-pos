@@ -1,7 +1,7 @@
-import { useState, useEffect } from react
+import { useState, useEffect } from 'react
 import Navbar from ../components/Navbar
-import { FaPlus, FaTrash, FaSave, FaTimes, FaKey } from react-icons/fa
-import { getUsers, addUser, deleteUser, updateUser } from ../api
+import { FaPlus, FaTrash, FaSave, FaTimes, FaKey } from 'react-icons/fa
+import { getUsers, addUser, deleteUser, updateUser } from '../api'
 
 const roles = [Admin, Cashier, Supervisor, Manager]
 const roleColors = { Admin: #6366f1, Cashier: #10b981, Supervisor: #f59e0b, Manager: #3b82f6 }

@@ -1,13 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from react
+import { useState, useEffect, useRef, useCallback } from 'react
 import Navbar from ../components/Navbar
-import { FaPrint, FaTimes, FaFileAlt, FaQrcode, FaCog, FaPlus, FaTrash } from react-icons/fa
-import * as XLSX from xlsx
+import { FaPrint, FaTimes, FaFileAlt, FaQrcode, FaCog, FaPlus, FaTrash } from 'react-icons/fa
+import * as XLSX from 'xlsx
 import {
   getMenu, getTables, updateTableByNumber,
   addTransaction, getTransactions, voidTransaction,
   getActiveShift, openShift, closeShift, addKitchenOrder,
   getLowStockAlerts
-} from ../api
+} from '../api'
 
 const categoryIcons = { Coffee: , Non-Coffee: , Beer: , Pulutan:  }
 const categories = [Coffee, Non-Coffee, Beer, Pulutan]

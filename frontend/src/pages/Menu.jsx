@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from react
+import { useState, useRef, useEffect } from 'react
 import Navbar from ../components/Navbar
-import { FaPlus, FaTrash, FaImage, FaSave, FaTimes, FaSearch, FaBox, FaCheckCircle, FaExclamationTriangle, FaTimesCircle } from react-icons/fa
-import { getMenu, addMenuItem, updateMenuItem, deleteMenuItem } from ../api
+import { FaPlus, FaTrash, FaImage, FaSave, FaTimes, FaSearch, FaBox, FaCheckCircle, FaExclamationTriangle, FaTimesCircle } from 'react-icons/fa
+import { getMenu, addMenuItem, updateMenuItem, deleteMenuItem } from '../api'
 
 const categories = [Coffee, Non-Coffee, Beer, Pulutan]
 const catLabels = { Coffee: Coffee, Non-Coffee: Non-Coffee, Beer: Beer, Pulutan: Snacks }

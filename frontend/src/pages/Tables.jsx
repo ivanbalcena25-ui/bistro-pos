@@ -1,7 +1,7 @@
-import { useState, useEffect } from react
+import { useState, useEffect } from 'react
 import Navbar from ../components/Navbar
-import { FaUserFriends, FaCheckCircle, FaTimesCircle, FaPlus, FaTrash } from react-icons/fa
-import { getTables, updateTableByNumber, addTable, deleteTable } from ../api
+import { FaUserFriends, FaCheckCircle, FaTimesCircle, FaPlus, FaTrash } from 'react-icons/fa
+import { getTables, updateTableByNumber, addTable, deleteTable } from '../api'
 
 function Tables() {
   const user = JSON.parse(localStorage.getItem(user) || {})

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from react
+import { useState, useEffect, useRef } from 'react
 import Navbar from ../components/Navbar
-import { FaMoneyBillWave, FaShoppingCart, FaCoffee, FaDownload, FaCalendarAlt, FaChevronLeft, FaChevronRight, FaUser, FaPrint } from react-icons/fa
-import { getTransactions } from ../api
+import { FaMoneyBillWave, FaShoppingCart, FaCoffee, FaDownload, FaCalendarAlt, FaChevronLeft, FaChevronRight, FaUser, FaPrint } from 'react-icons/fa
+import { getTransactions } from '../api'
 
 const MONTHS = [January,February,March,April,May,June,July,August,September,October,November,December]
 const DAYS = [Su,Mo,Tu,We,Th,Fr,Sa]
