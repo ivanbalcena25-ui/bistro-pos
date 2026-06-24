@@ -7,7 +7,6 @@ const navItems = [
   { path: '/kitchen',     label: 'Kitchen',     icon: '🍳', roles: ['Admin', 'Kitchen'] },
   { path: '/tables',      label: 'Tables',      icon: '🪑', roles: ['Admin', 'Cashier'] },
   { path: '/menu',        label: 'Menu',        icon: '🍽️', roles: ['Admin'] },
-  // FIX: Supervisor at Manager ay makakakita ng Reports
   { path: '/reports',     label: 'Reports',     icon: '📈', roles: ['Admin', 'Supervisor', 'Manager'] },
   { path: '/users',       label: 'Users',       icon: '👥', roles: ['Admin'] },
 ]
@@ -96,34 +95,53 @@ function Navbar() {
       {/* DESKTOP SIDEBAR */}
       {!isMobile && (
         <aside style={{
-          width: 200, minHeight: '100vh',
+          width: 220, minHeight: '100vh',
           background: 'linear-gradient(180deg, #14532d 0%, #166534 100%)',
           display: 'flex', flexDirection: 'column',
           boxShadow: '4px 0 20px rgba(22,163,74,0.15)',
           flexShrink: 0, position: 'sticky', top: 0,
           height: '100vh', overflowY: 'auto',
         }}>
-          {/* Logo */}
+
+          {/* ── LOGO ── */}
           <div style={{
-            padding: '18px 16px 16px',
+            padding: '24px 20px 20px',
             borderBottom: '1px solid rgba(255,255,255,0.1)',
-            display: 'flex', alignItems: 'center', gap: 9,
+            display: 'flex', alignItems: 'center', gap: 14,
           }}>
-            <span style={{ fontSize: 26, lineHeight: 1 }}>🏨</span>
-            <div>
-              <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 9, fontWeight: 800, letterSpacing: '2.5px' }}>VS HOTEL</div>
-              <div style={{ color: '#4ade80', fontSize: 14, fontWeight: 900, letterSpacing: '3px', lineHeight: 1.2 }}>BISTRO</div>
+            <span style={{ fontSize: 36, lineHeight: 1, flexShrink: 0 }}>🏨</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{
+                color: 'rgba(255,255,255,0.65)',
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: '3px',
+                textTransform: 'uppercase',
+                lineHeight: 1,
+              }}>
+                VS HOTEL
+              </div>
+              <div style={{
+                color: '#4ade80',
+                fontSize: 20,
+                fontWeight: 900,
+                letterSpacing: '4px',
+                lineHeight: 1.1,
+                textTransform: 'uppercase',
+              }}>
+                BISTRO
+              </div>
             </div>
           </div>
 
           {/* Nav Links */}
-          <nav style={{ flex: 1, padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <nav style={{ flex: 1, padding: '14px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
             {visibleItems.map(item => {
               const isActive = location.pathname === item.path
               return (
                 <Link key={item.path} to={item.path} style={{
-                  display: 'flex', alignItems: 'center', gap: 9,
-                  padding: '10px 12px', borderRadius: 10, textDecoration: 'none',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '11px 13px', borderRadius: 10, textDecoration: 'none',
                   background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
                   color: isActive ? 'white' : 'rgba(255,255,255,0.65)',
                   fontWeight: isActive ? 700 : 500, fontSize: 13.5,
@@ -133,7 +151,7 @@ function Navbar() {
                   onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}
                   onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
                 >
-                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  <span style={{ fontSize: 17 }}>{item.icon}</span>
                   {item.label}
                 </Link>
               )
@@ -142,8 +160,8 @@ function Navbar() {
 
           {/* User + Logout */}
           <div style={{ padding: '12px 10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 4px' }}>
-              <span style={{ fontSize: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '0 4px' }}>
+              <span style={{ fontSize: 20 }}>
                 {user.role === 'Admin' ? '👑' : user.role === 'Cashier' ? '🧑‍💼' : user.role === 'Kitchen' ? '🍳' : '📊'}
               </span>
               <div>
@@ -154,7 +172,7 @@ function Navbar() {
             <button
               onClick={() => setShowLogoutModal(true)}
               style={{
-                width: '100%', padding: '8px',
+                width: '100%', padding: '9px',
                 background: 'rgba(239,68,68,0.15)', color: '#fca5a5',
                 border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
                 cursor: 'pointer', fontSize: 12, fontWeight: 600,

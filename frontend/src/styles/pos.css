@@ -25,7 +25,7 @@
   --shadow-md: 0 4px 16px rgba(22,163,74,0.12), 0 2px 4px rgba(0,0,0,0.04);
   --shadow-lg: 0 12px 32px rgba(22,163,74,0.15), 0 4px 8px rgba(0,0,0,0.06);
   --r: 16px; --r-sm: 10px; --r-xs: 7px;
-  --navbar-width: 200px;
+  --navbar-width: 220px;
 }
 
 body {
